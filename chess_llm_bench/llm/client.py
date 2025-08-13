@@ -11,8 +11,9 @@ import asyncio
 import logging
 import random
 import re
+import time
+from typing import List, Optional, Union, Dict, Any, Tuple
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
 import os
 
 import chess
@@ -460,6 +461,11 @@ class LLMClient:
         except Exception as e:
             raise LLMProviderError(f"Failed to initialize provider {spec.provider}: {e}")
 
+        # Initialize move statistics tracking
+        self._total_move_time = 0.0
+        self._illegal_move_attempts = 0
+        self._move_count = 0
+
     async def pick_move(
         self,
         board: chess.Board,
@@ -483,6 +489,10 @@ class LLMClient:
         if board.is_game_over():
             raise LLMProviderError("Cannot generate move for finished game")
 
+        # Start timing
+        start_time = time.time()
+        illegal_attempts = 0
+
         try:
             # Generate move from LLM
             response = await self.provider.generate_move(board, temperature, timeout_s)
@@ -493,20 +503,56 @@ class LLMClient:
 
             if move and move in board.legal_moves:
                 logger.debug(f"Selected move: {move.uci()}")
+                self._record_move_stats(start_time, illegal_attempts)
                 return move
+            elif move:
+                # Move was parsed but is illegal
+                illegal_attempts += 1
+                logger.debug(f"Illegal move attempted: {move.uci()}")
 
             # If parsing failed, try SAN notation as fallback
             move = self._try_san_parsing(response, board)
-            if move:
+            if move and move in board.legal_moves:
                 logger.debug(f"Parsed SAN move: {move.uci()}")
+                self._record_move_stats(start_time, illegal_attempts)
                 return move
+            elif move:
+                # SAN move was parsed but is illegal
+                illegal_attempts += 1
+                logger.debug(f"Illegal SAN move attempted: {move.uci()}")
 
         except Exception as e:
             logger.warning(f"LLM move generation failed: {e}")
 
         # Final fallback to random move
         logger.info("Falling back to random move")
-        return self.provider._fallback_random_move(board)
+        fallback_move = self.provider._fallback_random_move(board)
+        self._record_move_stats(start_time, illegal_attempts)
+        return fallback_move
+
+    def _record_move_stats(self, start_time: float, illegal_attempts: int) -> None:
+        """Record timing and illegal move statistics for this move."""
+        move_time = time.time() - start_time
+        self._total_move_time += move_time
+        self._illegal_move_attempts += illegal_attempts
+        self._move_count += 1
+        logger.debug(f"Move stats: {move_time:.3f}s, {illegal_attempts} illegal attempts")
+
+    def get_move_stats(self) -> Tuple[float, int, float]:
+        """
+        Get current move statistics.
+
+        Returns:
+            Tuple of (total_time, illegal_attempts, average_time_per_move)
+        """
+        avg_time = self._total_move_time / self._move_count if self._move_count > 0 else 0.0
+        return (self._total_move_time, self._illegal_move_attempts, avg_time)
+
+    def reset_move_stats(self) -> None:
+        """Reset move statistics counters."""
+        self._total_move_time = 0.0
+        self._illegal_move_attempts = 0
+        self._move_count = 0
 
     def _parse_move(self, response: str, board: chess.Board) -> Optional[chess.Move]:
         """

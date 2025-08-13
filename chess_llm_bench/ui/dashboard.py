@@ -63,6 +63,7 @@ class Dashboard:
         if self._live is not None:
             return self._live
 
+        # Start Live display with proper configuration for real-time updates
         self._live = Live(
             self._create_empty_display(),
             console=self.console,
@@ -90,13 +91,22 @@ class Dashboard:
             stats: Current statistics for each bot
         """
         if self._live is None:
+            logger.warning("Dashboard update called but _live is None")
             return
 
         try:
-            content = self.render_dashboard(states, stats)
+            # Always update with appropriate content
+            if states:
+                content = self.render_dashboard(states, stats)
+            else:
+                content = self._create_empty_display()
+
+            # Update the live display
             self._live.update(content)
+
         except Exception as e:
             logger.error(f"Error updating dashboard: {e}")
+
 
     def render_dashboard(self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]) -> Panel:
         """
@@ -229,6 +239,19 @@ class Dashboard:
                 status_lines.append(f"Win rate: {stats.win_rate:.1%}")
                 status_lines.append(f"Wins: {stats.wins} | Draws: {stats.draws} | Losses: {stats.losses}")
 
+            # Timing and move quality stats
+            if stats.average_move_time > 0:
+                status_lines.append(f"Avg move time: {stats.average_move_time:.2f}s")
+            if stats.total_illegal_moves > 0:
+                status_lines.append(f"Illegal moves: {stats.total_illegal_moves}")
+
+        # Live timing stats during current game
+        if hasattr(state, 'average_move_time') and state.average_move_time > 0:
+            status_lines.append("")
+            status_lines.append(f"Current game avg: {state.average_move_time:.2f}s")
+            if hasattr(state, 'illegal_move_attempts') and state.illegal_move_attempts > 0:
+                status_lines.append(f"Current illegal: {state.illegal_move_attempts}")
+
         # Error handling
         if state.error_message:
             status_lines.append("")
@@ -281,6 +304,8 @@ class Dashboard:
         table.add_column("Games", style="blue", justify="right")
         table.add_column("Win Rate", style="yellow", justify="right")
         table.add_column("Record", style="dim", justify="center")
+        table.add_column("Avg Time", style="magenta", justify="right")
+        table.add_column("Illegal Moves", style="red", justify="right")
 
         for bot_name in sorted(states.keys()):
             state = states[bot_name]
@@ -306,13 +331,19 @@ class Dashboard:
             win_rate = f"{bot_stats.win_rate:.1%}" if bot_stats and bot_stats.total_games > 0 else "—"
             record = f"{bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L" if bot_stats else "—"
 
+            # Timing and illegal move statistics
+            avg_time = f"{bot_stats.average_move_time:.2f}s" if bot_stats and bot_stats.average_move_time > 0 else "—"
+            illegal_moves = str(bot_stats.total_illegal_moves) if bot_stats else "0"
+
             table.add_row(
                 bot_name,
                 Text(status, style=status_style),
                 max_elo,
                 games,
                 win_rate,
-                record
+                record,
+                avg_time,
+                illegal_moves
             )
 
         # Add budget information if available
@@ -414,11 +445,17 @@ class Dashboard:
         results_table.add_column("Games", style="blue", justify="right")
         results_table.add_column("Win Rate", style="yellow", justify="right")
         results_table.add_column("Record", style="white", justify="center")
+        results_table.add_column("Avg Time", style="bright_magenta", justify="right")
+        results_table.add_column("Illegal Moves", style="red", justify="right")
         results_table.add_column("Performance", style="magenta")
 
         for bot_name, stats in result.bot_results.items():
             win_rate = f"{stats.win_rate:.1%}" if stats.total_games > 0 else "—"
             record = f"{stats.wins}W-{stats.draws}D-{stats.losses}L"
+
+            # Timing and illegal move statistics
+            avg_time = f"{stats.average_move_time:.2f}s" if stats.average_move_time > 0 else "—"
+            illegal_moves = str(stats.total_illegal_moves)
 
             # Performance assessment
             if stats.max_elo_reached >= 1800:
@@ -440,6 +477,8 @@ class Dashboard:
                 str(stats.total_games),
                 win_rate,
                 record,
+                avg_time,
+                illegal_moves,
                 Text(performance, style=performance_style)
             )
 

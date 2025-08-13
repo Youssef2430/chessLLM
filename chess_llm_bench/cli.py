@@ -140,7 +140,7 @@ class BenchmarkOrchestrator:
 
         try:
             # Run benchmark with live dashboard
-            with self.dashboard.start_live_display() as live_display:
+            with self.dashboard.start_live_display():
                 # Start ladder runs for all bots
                 tasks = []
                 for bot in self.bots:
@@ -152,7 +152,7 @@ class BenchmarkOrchestrator:
                 # Update dashboard while games run
                 while any(not task.done() for task in tasks):
                     self.dashboard.update_display(self.states, self.stats)
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.1)  # Update every 100ms
 
                 # Wait for all tasks to complete
                 await asyncio.gather(*tasks, return_exceptions=True)
@@ -237,6 +237,7 @@ class BenchmarkOrchestrator:
     async def _run_bot_ladder(self, bot_name: str, output_dir: Path) -> None:
         """Run the complete ladder for a single bot."""
         try:
+            logger.info(f"Starting ladder run for {bot_name}")
             client = self.clients[bot_name]
             engine = self.engines[bot_name]
             state = self.states[bot_name]
@@ -246,12 +247,8 @@ class BenchmarkOrchestrator:
             game_runner = GameRunner(client, engine, self.config)
             ladder_runner = LadderRunner(game_runner, self.config)
 
-            # Run the ladder
-            max_elo, games = await ladder_runner.run_ladder(output_dir, state)
-
-            # Update statistics
-            for game in games:
-                bot_stats.add_game(game)
+            # Run the ladder with real-time stats updates
+            max_elo, games = await ladder_runner.run_ladder(output_dir, state, bot_stats)
 
             logger.info(f"{bot_name} completed ladder: max ELO {max_elo}")
 

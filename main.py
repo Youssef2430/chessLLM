@@ -32,8 +32,13 @@ Installation:
     # Windows:  choco install stockfish
 """
 
+import os
 import sys
 from pathlib import Path
+
+# Suppress gRPC warnings from Google AI client
+os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
+os.environ.setdefault("GRPC_TRACE", "")
 
 # Load environment variables from .env file
 try:

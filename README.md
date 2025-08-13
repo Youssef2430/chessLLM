@@ -14,6 +14,8 @@
 - 🎯 **ELO Ladder System**: Bots climb ratings by defeating Stockfish at increasing difficulty levels
 - 🎨 **Beautiful Terminal UI**: Real-time chess board visualization with rich formatting
 - 📊 **Comprehensive Analytics**: Detailed statistics, win rates, and performance tracking
+- ⏱️ **Move Timing Analysis**: Track response times and speed metrics for each model
+- 🚫 **Illegal Move Detection**: Monitor rule understanding and invalid move attempts
 - 🎮 **Preset Configurations**: Ready-made model lineups for different use cases
 - 💾 **Game Recording**: All games saved in PGN format with full analysis
 - ⚡ **Concurrent Testing**: Run multiple bots simultaneously for efficient benchmarking
@@ -103,7 +105,7 @@ python main.py --preset openai
 - **GPT-4 Turbo** - High-performance with large context
 - **GPT-3.5 Turbo** - Fast and efficient legacy model
 
-### 📡 Anthropic Models  
+### 📡 Anthropic Models
 - **Claude 3.5 Sonnet** - Most intelligent Claude model
 - **Claude 3.5 Haiku** - Fast and efficient
 - **Claude 3 Opus** - Most capable legacy model
@@ -145,7 +147,7 @@ Traditional chess engines like Stockfish play perfectly mechanical chess, which 
 # Use human-like engines (auto-detected)
 python main.py --preset premium --use-human-engine
 
-# Specify engine type explicitly  
+# Specify engine type explicitly
 python main.py --preset budget --use-human-engine --human-engine-type maia
 
 # Use Leela Chess Zero for human-like play
@@ -171,7 +173,7 @@ python test_human_engines.py --demo
 ### Why Use Human Engines?
 
 - **🎯 More Realistic Assessment**: Human engines make mistakes and play like real players
-- **📈 Better ELO Scaling**: Strength scales more naturally with human-like characteristics  
+- **📈 Better ELO Scaling**: Strength scales more naturally with human-like characteristics
 - **🎲 Move Variation**: Unlike mechanical engines, they show variation in move selection
 - **🧠 Human-like Thinking**: Trained on human games, not perfect engine analysis
 - **⚖️ Fair Evaluation**: Better reflects how LLMs would perform against human opponents
@@ -235,7 +237,36 @@ python main.py --demo
 
 ## 🎮 Live Dashboard
 
-The benchmark features a beautiful real-time terminal dashboard:
+The benchmark features a beautiful real-time terminal dashboard with comprehensive performance tracking:
+
+### 📊 Enhanced Performance Metrics
+
+**NEW**: The dashboard now tracks detailed performance metrics including:
+
+- **⏱️ Move Timing**: Real-time average move generation time per model
+- **🚫 Illegal Moves**: Count of invalid move attempts (indicates rule understanding)
+- **📈 Live Updates**: Real-time progress tracking during gameplay with immediate state updates
+- **💰 Cost Analysis**: Time-based cost estimation for API usage
+- **🔄 Responsive Dashboard**: Live display updates every move with no lag or freezing
+
+Example enhanced summary table:
+```
+┃ Bot               ┃ Status      ┃ Max ELO ┃ Games ┃ Win Rate ┃ Record    ┃ Avg Time ┃ Illegal Moves ┃
+┃ Claude 3.5 Sonnet ┃ ✅ Finished ┃    1400 ┃     8 ┃    62.5% ┃ 5W-0D-3L  ┃    2.34s ┃           12  ┃
+┃ GPT-4o            ┃ 🤔 Thinking ┃    1200 ┃     6 ┃    50.0% ┃ 3W-0D-3L  ┃    1.87s ┃            8  ┃
+```
+
+### 🎯 Benefits of Enhanced Metrics
+
+**Move Timing Analysis** helps you:
+- **Cost Optimization**: Estimate API costs based on response times
+- **Performance Comparison**: Compare model speed vs accuracy trade-offs
+- **Efficiency Ranking**: Identify fastest models for time-critical applications
+
+**Illegal Move Detection** reveals:
+- **Rule Understanding**: How well models comprehend chess rules
+- **Model Quality**: Lower illegal moves indicate better training
+- **Reliability Assessment**: Models with fewer errors are more dependable
 
 ```
 ╭─────── 🏆 Chess LLM ELO Ladder Benchmark ────────╮
@@ -287,6 +318,8 @@ Each bot is evaluated on:
 - **Maximum ELO Reached**: Highest Stockfish rating defeated
 - **Win Rate**: Percentage of games won
 - **Average Game Length**: Moves per game
+- **Move Timing Analysis**: Average time per move and response speed metrics
+- **Move Quality Assessment**: Illegal move attempts and rule comprehension scoring
 - **Opening Performance**: Success with different openings
 - **Endgame Strength**: Performance in late-game positions
 - **Cost Efficiency**: Performance per dollar spent
@@ -305,14 +338,14 @@ Each bot is evaluated on:
 --budget-limit AMOUNT                # Set spending limit in USD
 --show-costs                         # Display real-time cost tracking
 
-# Analysis & Ranking  
+# Analysis & Ranking
 --leaderboard [N]                    # Show top N models (default: 20)
 --provider-stats                     # Compare provider performance
 --analyze-model MODEL_ID             # Deep analysis of specific model
 
-# ELO Ladder Settings  
+# ELO Ladder Settings
 --start-elo ELO                      # Starting ELO rating (default: 600)
---elo-step STEP                      # ELO increment per rung (default: 100)  
+--elo-step STEP                      # ELO increment per rung (default: 100)
 --max-elo ELO                        # Maximum ELO to attempt (default: 2400)
 
 # Game Settings
@@ -324,7 +357,7 @@ Each bot is evaluated on:
 --llm-timeout SECONDS                # LLM response timeout (default: 20.0)
 --llm-temperature TEMP               # Sampling temperature (default: 0.0)
 
-# Output Settings  
+# Output Settings
 --output-dir PATH                    # Results directory (default: "runs")
 --save-pgn                          # Save games in PGN format
 
@@ -344,7 +377,7 @@ provider:model:name
 
 Examples:
 openai:gpt-4o:GPT-4o
-anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet  
+anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet
 gemini:gemini-1.5-pro:Gemini-1.5-Pro
 random::Baseline
 ```
@@ -360,12 +393,12 @@ def _create_chess_prompt(self, board: chess.Board) -> str:
     """Create a standardized chess prompt for the LLM."""
     legal_moves = " ".join(move.uci() for move in board.legal_moves)
     color = "White" if board.turn == chess.WHITE else "Black"
-    
+
     prompt = (
         "You are a strong chess player. Given the position and legal moves, "
         "choose the best move and respond with ONLY the UCI notation.\n\n"
         f"Position (FEN): {board.fen()}\n"
-        f"Side to move: {color}\n"  
+        f"Side to move: {color}\n"
         f"Legal moves: {legal_moves}\n\n"
         "Your response must be exactly one legal UCI move."
     )
@@ -375,7 +408,7 @@ def _create_chess_prompt(self, board: chess.Board) -> str:
 ### Error Handling and Fallbacks
 
 - **Timeout Protection**: LLM requests timeout after 20 seconds
-- **Move Validation**: All moves validated against legal move list  
+- **Move Validation**: All moves validated against legal move list
 - **Fallback System**: Random legal moves when LLM fails
 - **Robust Parsing**: Handles various move notation formats
 
@@ -407,7 +440,7 @@ results = await asyncio.gather(*tasks, return_exceptions=True)
 - Use **100 ELO steps** for balanced progression
 - Extend to **2400 ELO** for comprehensive evaluation
 
-### Statistical Significance  
+### Statistical Significance
 - Run multiple iterations for reliable statistics
 - Consider different random seeds
 - Analyze both win rates and maximum ELO reached
@@ -421,7 +454,7 @@ chess-llm-benchmark/
 ├── chess_llm_bench/          # Main package
 │   ├── core/                 # Core game logic
 │   ├── llm/                  # LLM providers and models
-│   ├── ui/                   # Terminal UI components  
+│   ├── ui/                   # Terminal UI components
 │   └── cli.py                # Command-line interface
 ├── tests/                    # Test suite
 ├── runs/                     # Benchmark results
@@ -449,7 +482,7 @@ pytest tests/ -v
 # Type checking
 mypy chess_llm_bench/
 
-# Code formatting  
+# Code formatting
 black chess_llm_bench/
 isort chess_llm_bench/
 ```
@@ -494,7 +527,7 @@ python main.py --bots "openai:gpt-4o-mini:Test" --budget-limit 1.0
 ### Pricing Information
 Current approximate costs (per 1K tokens):
 - **GPT-4o Mini**: $0.00015 input, $0.0006 output (~$0.004/game)
-- **Claude 3.5 Haiku**: $0.0008 input, $0.004 output (~$0.019/game)  
+- **Claude 3.5 Haiku**: $0.0008 input, $0.004 output (~$0.019/game)
 - **Gemini 1.5 Flash**: $0.000075 input, $0.0003 output (~$0.002/game)
 - **GPT-4o**: $0.0025 input, $0.01 output (~$0.065/game)
 
@@ -528,10 +561,9 @@ All results are automatically stored in SQLite database for:
 
 ## 📞 Support
 
-- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/chess-llm-benchmark/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/yourusername/chess-llm-benchmark/discussions)  
-- 📧 **Email**: your.email@example.com
+- 🐛 **Issues**: [GitHub Issues](https://github.com/Youssef2430/chessLLM/issues)
+- 📧 **Email**: youssefchouay30@gmail.com
 
 ---
 
-**Made with ♟️ and 🤖 by the Chess LLM Benchmark Team**
+**Made with ♟️ and 🤖 by the Youssef**

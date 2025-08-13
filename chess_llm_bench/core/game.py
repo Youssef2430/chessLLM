@@ -11,12 +11,12 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict
 
 import chess
 import chess.pgn as chess_pgn
 
-from .models import Config, GameRecord, LiveState
+from .models import Config, GameRecord, LiveState, LadderStats
 from .engine import ChessEngine
 from .human_engine import HumanLikeEngine
 from ..llm.client import LLMClient
@@ -99,6 +99,9 @@ class GameRunner:
         state._chess_board = board.copy()
         state._moves_played = []
 
+        # Reset LLM move statistics for this game
+        self.llm.reset_move_stats()
+
         logger.info(f"Starting game: {self.llm.spec.name} vs Stockfish({elo}), "
                    f"LLM plays {'White' if llm_white else 'Black'}")
 
@@ -137,11 +140,18 @@ class GameRunner:
             # Save PGN and create record
             pgn_path = await self._save_pgn(game_pgn, output_dir, elo)
 
-            # Update final state
+            # Collect move statistics from LLM
+            total_time, illegal_attempts, avg_time = self.llm.get_move_stats()
+
+            # Update live state with timing info
+            state.total_move_time = total_time
+            state.average_move_time = avg_time
+            state.illegal_move_attempts = illegal_attempts
             state.final_result = result
             state.status = f"finished {result} vs {elo}"
 
-            logger.info(f"Game completed: {result} in {board.ply()} plies")
+            logger.info(f"Game completed: {result} in {board.ply()} plies, "
+                       f"avg move time: {avg_time:.2f}s, illegal attempts: {illegal_attempts}")
 
             return GameRecord(
                 elo=elo,
@@ -303,6 +313,7 @@ class LadderRunner:
         self,
         output_dir: Path,
         state: LiveState,
+        bot_stats: LadderStats,
         start_elo: Optional[int] = None,
         max_elo: Optional[int] = None,
         elo_step: Optional[int] = None
@@ -313,6 +324,7 @@ class LadderRunner:
         Args:
             output_dir: Output directory for game files
             state: Live state for UI updates
+            bot_stats: Bot statistics for real-time updates
             start_elo: Starting ELO (uses config default if None)
             max_elo: Maximum ELO (uses config default if None)
             elo_step: ELO increment (uses config default if None)
@@ -326,12 +338,15 @@ class LadderRunner:
         step = elo_step or self.config.elo_step
 
         games: list[GameRecord] = []
+        losses_at_elo: Dict[int, int] = {}  # Track losses per ELO level
 
         logger.info(f"Starting ladder run: {current_elo} → {max_target_elo} (step: {step})")
 
         while current_elo <= max_target_elo:
-            # Add current ELO to ladder display
-            state.ladder.append(current_elo)
+            # Add current ELO to ladder display only if it's the first attempt
+            if current_elo not in losses_at_elo:
+                state.ladder.append(current_elo)
+                losses_at_elo[current_elo] = 0
 
             try:
                 # Play game at current ELO
@@ -342,17 +357,40 @@ class LadderRunner:
                 )
                 games.append(game_record)
 
-                # Determine if we advance based on result
+                # Collect timing statistics from LLM
+                total_time, illegal_attempts, _ = self.game_runner.llm.get_move_stats()
+
+                # Update statistics in real-time
+                bot_stats.add_game(game_record)
+                bot_stats.add_timing_stats(total_time, illegal_attempts)
+
+                # Check if this was a loss
+                if game_record.llm_lost:
+                    losses_at_elo[current_elo] += 1
+
+                    # Check if this is the second loss at this ELO
+                    if losses_at_elo[current_elo] >= 2:
+                        logger.info(f"Ladder run ended at ELO {current_elo} (lost twice)")
+                        break
+                    else:
+                        # First loss - give second chance
+                        logger.info(f"First loss at ELO {current_elo}, giving second chance")
+                        state.status = f"retry at {current_elo} (1 loss)..."
+                        await asyncio.sleep(0.5)
+                        continue  # Stay at same ELO for retry
+
+                # Determine if we advance based on result (win or draw)
                 should_advance = self._should_advance(game_record)
 
-                if not should_advance:
+                if should_advance:
+                    # Advance to next ELO level
+                    current_elo += step
+                    state.status = "advancing to next level..."
+                    await asyncio.sleep(0.5)  # Brief pause between games
+                else:
+                    # This handles cases where escalate_on is "on_win" and we drew
                     logger.info(f"Ladder run ended at ELO {current_elo} (result: {game_record.result})")
                     break
-
-                # Advance to next ELO level
-                current_elo += step
-                state.status = "advancing to next level..."
-                await asyncio.sleep(0.5)  # Brief pause between games
 
             except Exception as e:
                 logger.error(f"Ladder run failed at ELO {current_elo}: {e}")

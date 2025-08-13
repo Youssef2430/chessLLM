@@ -80,6 +80,10 @@ class LadderStats:
     draws: int = 0
     wins: int = 0
 
+    # Timing and move quality stats
+    total_move_time: float = 0.0
+    total_illegal_moves: int = 0
+
     @property
     def total_games(self) -> int:
         """Total number of games played."""
@@ -125,6 +129,21 @@ class LadderStats:
         self.losses = 0
         self.draws = 0
         self.wins = 0
+        self.total_move_time = 0.0
+        self.total_illegal_moves = 0
+
+    @property
+    def average_move_time(self) -> float:
+        """Average time per move across all games."""
+        total_moves = sum(game.ply_count for game in self.games)
+        if total_moves == 0:
+            return 0.0
+        return self.total_move_time / total_moves
+
+    def add_timing_stats(self, total_time: float, illegal_moves: int) -> None:
+        """Add timing and move quality statistics from a completed game."""
+        self.total_move_time += total_time
+        self.total_illegal_moves += illegal_moves
 
 
 @dataclass
@@ -141,6 +160,11 @@ class LiveState:
     moves_made: int = 0
     final_result: Optional[str] = None
     error_message: Optional[str] = None
+
+    # Timing and move tracking
+    total_move_time: float = 0.0  # Total time spent generating moves
+    average_move_time: float = 0.0  # Average time per move
+    illegal_move_attempts: int = 0  # Number of illegal moves attempted
 
     # Beautiful chess board support
     _chess_board: Optional[chess.Board] = field(default=None, init=False)
