@@ -186,6 +186,12 @@ class Config:
     bots: str = "random::bot1,random::bot2"
     stockfish_path: Optional[str] = None
 
+    # Human-like engine settings
+    use_human_engine: bool = False
+    human_engine_type: str = "maia"  # "maia", "lczero", "human_stockfish"
+    human_engine_path: Optional[str] = None
+    human_engine_fallback: bool = True  # Fall back to stockfish if human engine fails
+
     # ELO ladder settings
     start_elo: int = 600
     elo_step: int = 100
@@ -206,6 +212,10 @@ class Config:
 
     # UI settings
     refresh_rate: int = 6  # Hz
+
+    # Budget tracking settings
+    budget_limit: Optional[float] = None
+    show_costs: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""

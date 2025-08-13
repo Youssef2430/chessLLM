@@ -22,6 +22,7 @@ from rich.layout import Layout
 from rich.align import Align
 
 from ..core.models import LiveState, LadderStats, Config, BenchmarkResult
+from ..core.budget import get_budget_tracker
 from .board import ChessBoardRenderer, render_robot_battle, BoardTheme
 import chess
 
@@ -167,7 +168,7 @@ class Dashboard:
         table = Table.grid(expand=True)
 
         # Board display (left column) - Beautiful Unicode chess board
-        if state.board_ascii and hasattr(state, '_chess_board'):
+        if state.board_ascii and hasattr(state, '_chess_board') and state._chess_board is not None:
             # Use the beautiful chess board renderer
             try:
                 last_move = chess.Move.from_uci(state.last_move_uci) if state.last_move_uci else None
@@ -314,8 +315,36 @@ class Dashboard:
                 record
             )
 
+        # Add budget information if available
+        budget_text = None
+        try:
+            budget_tracker = get_budget_tracker()
+            if budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0:
+                budget_info = budget_tracker.get_budget_info()
+                if budget_info:
+                    budget_text = Text()
+                    budget_text.append("💰 Cost: ", style="dim")
+                    budget_text.append(budget_info["total_cost"], style=budget_info.get("style", "green"))
+
+                    if "budget_limit" in budget_info and budget_info["budget_limit"] != "Unlimited":
+                        budget_text.append(" / ", style="dim")
+                        budget_text.append(budget_info["budget_limit"], style="dim")
+                        budget_text.append(f" ({budget_info.get('usage_percentage', '0%')})", style="dim")
+
+                    if "api_calls" in budget_info:
+                        budget_text.append(f"  |  📞 {budget_info['api_calls']} calls", style="dim")
+        except Exception:
+            # Ignore budget display errors to not break the dashboard
+            pass
+
+        # Combine table and budget info
+        if budget_text:
+            final_content = Group(table, budget_text)
+        else:
+            final_content = table
+
         return Panel(
-            table,
+            final_content,
             title="📊 Summary",
             border_style="blue",
             padding=(0, 1)
@@ -422,6 +451,14 @@ class Dashboard:
 
         if result.best_bot:
             summary_lines.append(f"🏆 Best bot: {result.best_bot} (ELO {result.best_elo})")
+
+        # Add budget information if available
+        budget_tracker = get_budget_tracker()
+        if budget_tracker.is_active and budget_tracker.get_current_cost() > 0:
+            summary_lines.append(f"💰 Total cost: ${budget_tracker.get_current_cost():.4f}")
+            if budget_tracker.budget_limit:
+                percentage = (budget_tracker.get_current_cost() / budget_tracker.budget_limit) * 100
+                summary_lines.append(f"📊 Budget usage: {percentage:.1f}%")
 
         summary_lines.append(f"💾 Results saved to: {result.output_dir}")
 

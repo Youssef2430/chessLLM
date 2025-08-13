@@ -17,6 +17,8 @@
 - 🎮 **Preset Configurations**: Ready-made model lineups for different use cases
 - 💾 **Game Recording**: All games saved in PGN format with full analysis
 - ⚡ **Concurrent Testing**: Run multiple bots simultaneously for efficient benchmarking
+- 💰 **Budget Tracking**: Real-time cost monitoring with spending limits and alerts
+- 🏆 **Performance Ranking**: Historical leaderboards and model comparison system
 
 ## 🚀 Quick Start
 
@@ -39,6 +41,26 @@ sudo apt-get install stockfish
 
 # Windows:
 choco install stockfish
+
+# Optional: Install human-like engines for more realistic opponents
+# Maia (most human-like, manual installation required):
+#   Visit: https://github.com/CSSLab/maia-chess
+
+# LCZero (neural network engine):
+# macOS:
+brew install lc0
+
+# Ubuntu/Debian:
+sudo apt-get install lc0
+
+# Or use the installation helper:
+python install_human_engines.py --engine all
+```
+
+
+# Or install specific human engines:
+python install_human_engines.py --engine maia  # Most human-like (recommended)
+python install_human_engines.py --engine lczero  # Neural network based
 ```
 
 ### Set Up API Keys
@@ -60,8 +82,14 @@ python main.py --demo
 # Premium models from all providers
 python main.py --preset premium
 
+# Use human-like engines for more realistic opponents
+python main.py --preset premium --use-human-engine
+
 # Budget-friendly models
 python main.py --preset budget
+
+# Track spending with $5 budget limit
+python main.py --preset premium --budget-limit 5.0 --show-costs
 
 # OpenAI models only
 python main.py --preset openai
@@ -97,6 +125,67 @@ python main.py --preset openai
 | `anthropic` | Anthropic's best models | Claude 3.5 Sonnet, Claude 3.5 Haiku |
 | `gemini` | Google's best models | Gemini 1.5 Pro, Gemini 1.5 Flash |
 
+## 🧠 Human-like Chess Engines
+
+**NEW FEATURE**: Use human-like chess engines instead of traditional Stockfish for more realistic opponents!
+
+Traditional chess engines like Stockfish play perfectly mechanical chess, which may not reflect how human players actually perform. Human-like engines provide more realistic opponents that make human-like decisions and mistakes.
+
+### Available Human Engines
+
+| Engine | Description | Human-likeness | Installation |
+|--------|-------------|----------------|--------------|
+| **🧠 Maia** | Neural network trained on human games | ⭐⭐⭐⭐⭐ Most realistic | [Maia Chess](https://github.com/CSSLab/maia-chess) |
+| **♟️ LCZero** | Neural network with human-like settings | ⭐⭐⭐⭐ Very good | `brew install lc0` (macOS) |
+| **🤖 Human Stockfish** | Traditional Stockfish with human settings | ⭐⭐⭐ Good fallback | Built-in with Stockfish |
+
+### Quick Start with Human Engines
+
+```bash
+# Use human-like engines (auto-detected)
+python main.py --preset premium --use-human-engine
+
+# Specify engine type explicitly  
+python main.py --preset budget --use-human-engine --human-engine-type maia
+
+# Use Leela Chess Zero for human-like play
+python main.py --preset openai --use-human-engine --human-engine-type lczero
+
+# Compare human vs traditional engines
+python examples/human_engine_demo.py --mode comparison
+```
+
+### Installation Helper
+
+```bash
+# Install human engines automatically
+python install_human_engines.py --engine all
+
+# Install specific engine
+python install_human_engines.py --engine maia
+
+# Test your installation
+python test_human_engines.py --demo
+```
+
+### Why Use Human Engines?
+
+- **🎯 More Realistic Assessment**: Human engines make mistakes and play like real players
+- **📈 Better ELO Scaling**: Strength scales more naturally with human-like characteristics  
+- **🎲 Move Variation**: Unlike mechanical engines, they show variation in move selection
+- **🧠 Human-like Thinking**: Trained on human games, not perfect engine analysis
+- **⚖️ Fair Evaluation**: Better reflects how LLMs would perform against human opponents
+
+### Comparison: Human vs Traditional
+
+```bash
+# See the difference in action
+python examples/human_engine_demo.py --mode comparison
+
+# Results show human engines vary moves 50-75% more than traditional engines
+# providing much more realistic opposition for LLM evaluation
+```
+
 ## 📋 Usage Examples
 
 ### Basic Usage
@@ -126,6 +215,9 @@ python main.py --preset openai --think-time 0.1 --max-plies 100
 
 # High-temperature creative play
 python main.py --bots "openai:gpt-4o:Creative-GPT" --llm-temperature 0.8
+
+# Cost-controlled testing
+python main.py --preset budget --budget-limit 2.0 --show-costs
 ```
 
 ### Demo Modes
@@ -197,6 +289,8 @@ Each bot is evaluated on:
 - **Average Game Length**: Moves per game
 - **Opening Performance**: Success with different openings
 - **Endgame Strength**: Performance in late-game positions
+- **Cost Efficiency**: Performance per dollar spent
+- **Consistency Score**: Standard deviation of ELO performance
 
 ## ⚙️ Configuration Options
 
@@ -206,6 +300,15 @@ Each bot is evaluated on:
 # Bot Configuration
 --bots "provider:model:name,..."     # Custom bot specification
 --preset PRESET                      # Use predefined bot lineup
+
+# Budget & Cost Tracking
+--budget-limit AMOUNT                # Set spending limit in USD
+--show-costs                         # Display real-time cost tracking
+
+# Analysis & Ranking  
+--leaderboard [N]                    # Show top N models (default: 20)
+--provider-stats                     # Compare provider performance
+--analyze-model MODEL_ID             # Deep analysis of specific model
 
 # ELO Ladder Settings  
 --start-elo ELO                      # Starting ELO rating (default: 600)
@@ -369,6 +472,59 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **OpenAI, Anthropic, Google** - For providing powerful language models
 - **python-chess** - For excellent chess programming library
 - **Rich** - For beautiful terminal formatting
+
+## 💰 Budget Tracking & Cost Management
+
+### Real-Time Cost Monitoring
+```bash
+# Set $10 budget limit with cost display
+python main.py --preset premium --budget-limit 10.0 --show-costs
+
+# Track costs for specific models
+python main.py --bots "openai:gpt-4o-mini:Test" --budget-limit 1.0
+```
+
+### Cost Management Features
+- **Real-time tracking**: See costs as they accumulate
+- **Budget limits**: Set spending caps with automatic warnings
+- **Cost breakdown**: Detailed analysis by provider, model, and bot
+- **Efficiency metrics**: Cost per game, cost per ELO point
+- **Historical tracking**: Track spending trends over time
+
+### Pricing Information
+Current approximate costs (per 1K tokens):
+- **GPT-4o Mini**: $0.00015 input, $0.0006 output (~$0.004/game)
+- **Claude 3.5 Haiku**: $0.0008 input, $0.004 output (~$0.019/game)  
+- **Gemini 1.5 Flash**: $0.000075 input, $0.0003 output (~$0.002/game)
+- **GPT-4o**: $0.0025 input, $0.01 output (~$0.065/game)
+
+## 🏆 Ranking & Analysis System
+
+### Leaderboard Commands
+```bash
+# Show top 10 performing models
+python main.py --leaderboard 10
+
+# Compare all providers
+python main.py --provider-stats
+
+# Deep-dive analysis of specific model
+python main.py --analyze-model openai:gpt-4o
+```
+
+### Performance Tracking
+- **Historical leaderboards**: Track best performers over time
+- **Efficiency rankings**: Best performance per dollar spent
+- **Trend analysis**: Identify improving vs declining models
+- **Statistical insights**: Mean, median, consistency scores
+- **Provider comparisons**: Cross-provider performance analysis
+
+### Database Storage
+All results are automatically stored in SQLite database for:
+- Historical analysis and trends
+- Performance comparisons across runs
+- Cost tracking and efficiency analysis
+- Statistical significance testing
 
 ## 📞 Support
 

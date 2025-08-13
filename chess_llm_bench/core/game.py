@@ -11,13 +11,14 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import chess
 import chess.pgn as chess_pgn
 
 from .models import Config, GameRecord, LiveState
 from .engine import ChessEngine
+from .human_engine import HumanLikeEngine
 from ..llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -29,21 +30,23 @@ class GameRunner:
 
     This class orchestrates the game flow, handles move generation from both
     sides, manages game state, and produces game records with PGN files.
+    Supports both traditional engines (Stockfish) and human-like engines (Maia, LCZero).
     """
 
-    def __init__(self, llm_client: LLMClient, engine: ChessEngine, config: Config):
+    def __init__(self, llm_client: LLMClient, engine: Union[ChessEngine, HumanLikeEngine], config: Config):
         """
         Initialize the game runner.
 
         Args:
             llm_client: LLM client for move generation
-            engine: Chess engine for opponent moves
+            engine: Chess engine or human-like engine for opponent moves
             config: Global configuration
         """
         self.llm = llm_client
         self.engine = engine
         self.config = config
         self._game_counter = 0
+        self._is_human_engine = isinstance(engine, HumanLikeEngine)
 
     async def play_game(
         self,
@@ -173,8 +176,12 @@ class GameRunner:
             return legal_moves[0]  # Simple fallback
 
     async def _get_engine_move(self, board: chess.Board, state: LiveState, elo: int) -> chess.Move:
-        """Get a move from the chess engine."""
-        state.status = f"vs {elo} (Stockfish thinking...)"
+        """Get a move from the chess engine or human-like engine."""
+        if self._is_human_engine:
+            engine_name = getattr(self.engine, 'engine_type', 'Human Engine')
+            state.status = f"vs {elo} ({engine_name.title()} thinking...)"
+        else:
+            state.status = f"vs {elo} (Stockfish thinking...)"
         return await self.engine.get_move(board)
 
     def _execute_move(
@@ -210,15 +217,24 @@ class GameRunner:
         game.headers["Date"] = datetime.utcnow().strftime("%Y.%m.%d")
         game.headers["Round"] = str(self._game_counter)
 
+        # Determine engine name and type
+        if self._is_human_engine:
+            engine_type = getattr(self.engine, 'engine_type', 'Human Engine')
+            engine_name = f"{engine_type.title()}({elo})"
+            engine_type_header = "Human-like Engine"
+        else:
+            engine_name = f"Stockfish({elo})"
+            engine_type_header = "Engine"
+
         if llm_white:
             game.headers["White"] = self.llm.spec.name
-            game.headers["Black"] = f"Stockfish({elo})"
+            game.headers["Black"] = engine_name
             game.headers["WhiteType"] = "LLM"
-            game.headers["BlackType"] = "Engine"
+            game.headers["BlackType"] = engine_type_header
         else:
-            game.headers["White"] = f"Stockfish({elo})"
+            game.headers["White"] = engine_name
             game.headers["Black"] = self.llm.spec.name
-            game.headers["WhiteType"] = "Engine"
+            game.headers["WhiteType"] = engine_type_header
             game.headers["BlackType"] = "LLM"
 
         # Add metadata
@@ -226,6 +242,9 @@ class GameRunner:
         game.headers["LLM_Model"] = self.llm.spec.model
         game.headers["Engine_ELO"] = str(elo)
         game.headers["TimeControl"] = f"{self.config.think_time}s+0"
+
+        if self._is_human_engine:
+            game.headers["Engine_Type"] = getattr(self.engine, 'engine_type', 'human')
 
         return game
 

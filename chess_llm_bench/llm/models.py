@@ -112,20 +112,20 @@ ANTHROPIC_MODELS = [
 # Google Gemini Models
 GEMINI_MODELS = [
     ModelInfo(
-        name="gemini-1.5-pro",
-        display_name="Gemini 1.5 Pro",
+        name="gemini-2.5-pro",
+        display_name="Gemini 2.5 Pro",
         provider="gemini",
-        model_id="gemini-1.5-pro",
+        model_id="gemini-2.5-pro",
         description="Most capable Gemini model with large context",
         recommended=True,
         context_length=1000000,
         notes="Excellent reasoning, massive context window"
     ),
     ModelInfo(
-        name="gemini-1.5-flash",
-        display_name="Gemini 1.5 Flash",
+        name="gemini-2.5-flash",
+        display_name="Gemini 2.5 Flash",
         provider="gemini",
-        model_id="gemini-1.5-flash",
+        model_id="gemini-2.5-flash",
         description="Fast and efficient Gemini model",
         recommended=True,
         context_length=1000000,
@@ -139,7 +139,7 @@ GEMINI_MODELS = [
         description="Legacy Gemini Pro model",
         recommended=False,
         context_length=30720,
-        notes="Older model, use 1.5 variants instead"
+        notes="Older model, use 2.5 variants instead"
     ),
 ]
 
@@ -245,8 +245,8 @@ def get_premium_bot_lineup() -> List[BotSpec]:
         get_model_info("openai", "gpt-4o-mini"),
         get_model_info("anthropic", "claude-3-5-sonnet"),
         get_model_info("anthropic", "claude-3-5-haiku"),
-        get_model_info("gemini", "gemini-1.5-pro"),
-        get_model_info("gemini", "gemini-1.5-flash"),
+        get_model_info("gemini", "gemini-2.5-pro"),
+        get_model_info("gemini", "gemini-2.5-flash"),
     ]
     return create_bot_specs(premium_models)
 
@@ -263,7 +263,7 @@ def get_budget_bot_lineup() -> List[BotSpec]:
         get_model_info("openai", "gpt-3.5-turbo"),
         get_model_info("anthropic", "claude-3-5-haiku"),
         get_model_info("anthropic", "claude-3-haiku"),
-        get_model_info("gemini", "gemini-1.5-flash"),
+        get_model_info("gemini", "gemini-2.5-flash"),
     ]
     return create_bot_specs(budget_models)
 

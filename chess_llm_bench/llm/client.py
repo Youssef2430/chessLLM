@@ -18,6 +18,7 @@ import os
 import chess
 
 from ..core.models import BotSpec
+from ..core.budget import record_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -128,11 +129,42 @@ class OpenAIProvider(BaseLLMProvider):
                 asyncio.to_thread(self._call_openai, prompt, temperature),
                 timeout=timeout_s
             )
+
+            # Record usage for budget tracking
+            record_llm_usage(
+                provider="openai",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response=response,
+                success=True
+            )
+
             return response
 
         except asyncio.TimeoutError:
+            # Record failed usage
+            record_llm_usage(
+                provider="openai",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response="",
+                success=False,
+                error_message=f"Request timed out after {timeout_s}s"
+            )
             raise LLMProviderError(f"OpenAI request timed out after {timeout_s}s")
         except Exception as e:
+            # Record failed usage
+            record_llm_usage(
+                provider="openai",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response="",
+                success=False,
+                error_message=str(e)
+            )
             raise LLMProviderError(f"OpenAI API error: {e}")
 
     def _call_openai(self, prompt: str, temperature: float) -> str:
@@ -198,11 +230,42 @@ class AnthropicProvider(BaseLLMProvider):
                 asyncio.to_thread(self._call_anthropic, prompt, temperature),
                 timeout=timeout_s
             )
+
+            # Record usage for budget tracking
+            record_llm_usage(
+                provider="anthropic",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response=response,
+                success=True
+            )
+
             return response
 
         except asyncio.TimeoutError:
+            # Record failed usage
+            record_llm_usage(
+                provider="anthropic",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response="",
+                success=False,
+                error_message=f"Request timed out after {timeout_s}s"
+            )
             raise LLMProviderError(f"Anthropic request timed out after {timeout_s}s")
         except Exception as e:
+            # Record failed usage
+            record_llm_usage(
+                provider="anthropic",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response="",
+                success=False,
+                error_message=str(e)
+            )
             raise LLMProviderError(f"Anthropic API error: {e}")
 
     def _call_anthropic(self, prompt: str, temperature: float) -> str:
@@ -281,11 +344,42 @@ class GeminiProvider(BaseLLMProvider):
                 asyncio.to_thread(self._call_gemini, prompt, temperature),
                 timeout=timeout_s
             )
+
+            # Record usage for budget tracking
+            record_llm_usage(
+                provider="gemini",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response=response,
+                success=True
+            )
+
             return response
 
         except asyncio.TimeoutError:
+            # Record failed usage
+            record_llm_usage(
+                provider="gemini",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response="",
+                success=False,
+                error_message=f"Request timed out after {timeout_s}s"
+            )
             raise LLMProviderError(f"Gemini request timed out after {timeout_s}s")
         except Exception as e:
+            # Record failed usage
+            record_llm_usage(
+                provider="gemini",
+                model=self.spec.model,
+                bot_name=self.spec.name,
+                prompt=prompt,
+                response="",
+                success=False,
+                error_message=str(e)
+            )
             raise LLMProviderError(f"Gemini API error: {e}")
 
     def _call_gemini(self, prompt: str, temperature: float) -> str:

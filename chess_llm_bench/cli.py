@@ -14,24 +14,38 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import chess
 from rich.console import Console
 
 from .core.models import Config, BotSpec, LiveState, LadderStats, BenchmarkResult
 from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint
+from .core.human_engine import HumanLikeEngine, autodetect_human_engines, get_best_human_engine, get_human_engine_installation_hint, create_human_engine
 from .core.game import GameRunner, LadderRunner
 from .llm.client import LLMClient, parse_bot_spec
 from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_premium_bot_lineup
+from .core.budget import start_budget_tracking, stop_budget_tracking, get_budget_tracker
+from .core.results import store_benchmark_results, show_leaderboard, show_provider_comparison, analyze_model
 from .ui.dashboard import Dashboard
 from .ui.board import render_robot_battle
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging to not interfere with live dashboard
+def setup_logging(level=logging.INFO):
+    """Setup logging that doesn't interfere with Rich live display."""
+    # Remove any existing handlers to avoid console output
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Use NullHandler during live display to suppress console output
+    null_handler = logging.NullHandler()
+    root_logger.addHandler(null_handler)
+    root_logger.setLevel(level)
+
+# Initialize with null handler to avoid console interference
+setup_logging()
 logger = logging.getLogger(__name__)
 
 console = Console()
@@ -49,10 +63,11 @@ class BenchmarkOrchestrator:
         """Initialize the benchmark orchestrator."""
         self.config = config
         self.dashboard = Dashboard(console, config)
+        self.budget_tracker = None
 
         # Runtime state
         self.bots: List[BotSpec] = []
-        self.engines: Dict[str, ChessEngine] = {}
+        self.engines: Dict[str, Union[ChessEngine, HumanLikeEngine]] = {}
         self.clients: Dict[str, LLMClient] = {}
         self.states: Dict[str, LiveState] = {}
         self.stats: Dict[str, LadderStats] = {}
@@ -64,6 +79,14 @@ class BenchmarkOrchestrator:
         Returns:
             Complete benchmark results
         """
+        # Start budget tracking if enabled
+        budget_summary = None
+        if self.config.budget_limit or self.config.show_costs:
+            self.budget_tracker = start_budget_tracking(self.config.budget_limit)
+            console.print(f"[green]💰 Budget tracking enabled[/green]")
+            if self.config.budget_limit:
+                console.print(f"[yellow]⚠️  Budget limit: ${self.config.budget_limit:.2f}[/yellow]")
+
         # Parse and validate bot specifications
         try:
             self.bots = parse_bot_spec(self.config.bots)
@@ -72,15 +95,40 @@ class BenchmarkOrchestrator:
         except Exception as e:
             raise RuntimeError(f"Invalid bot specification: {e}")
 
-        # Validate Stockfish
-        stockfish_path = autodetect_stockfish(self.config.stockfish_path)
-        if not stockfish_path:
-            raise RuntimeError(f"Stockfish not found.\n\n{get_friendly_stockfish_hint()}")
+        # Determine engine type and validate
+        if self.config.use_human_engine:
+            # Try to use human-like engine
+            if self.config.human_engine_path and self.config.human_engine_type:
+                engine_path = self.config.human_engine_path
+                engine_type = self.config.human_engine_type
+                logger.info(f"Using human-like engine: {engine_type} at {engine_path}")
+            else:
+                # Auto-detect best human engine
+                best_engine = get_best_human_engine()
+                if best_engine:
+                    engine_type, engine_path = best_engine
+                    logger.info(f"Auto-detected human-like engine: {engine_type} at {engine_path}")
+                else:
+                    if self.config.human_engine_fallback:
+                        # Fall back to Stockfish
+                        logger.warning("No human-like engines found, falling back to Stockfish")
+                        stockfish_path = autodetect_stockfish(self.config.stockfish_path)
+                        if not stockfish_path:
+                            raise RuntimeError(f"Neither human engines nor Stockfish found.\n\n{get_human_engine_installation_hint()}")
+                        engine_path = stockfish_path
+                        engine_type = "stockfish"
+                    else:
+                        raise RuntimeError(f"Human-like engines not found.\n\n{get_human_engine_installation_hint()}")
 
-        logger.info(f"Using Stockfish: {stockfish_path}")
+            await self._initialize_components(engine_path, engine_type, is_human_engine=True)
+        else:
+            # Use traditional Stockfish
+            stockfish_path = autodetect_stockfish(self.config.stockfish_path)
+            if not stockfish_path:
+                raise RuntimeError(f"Stockfish not found.\n\n{get_friendly_stockfish_hint()}")
 
-        # Initialize components
-        await self._initialize_components(stockfish_path)
+            logger.info(f"Using Stockfish: {stockfish_path}")
+            await self._initialize_components(stockfish_path, "stockfish", is_human_engine=False)
 
         # Create output directory
         run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -113,8 +161,14 @@ class BenchmarkOrchestrator:
                 self.dashboard.update_display(self.states, self.stats)
 
         finally:
+            # Stop budget tracking and get summary
+            if self.budget_tracker:
+                budget_summary = stop_budget_tracking()
+
             # Cleanup
             await self._cleanup_components()
+
+
 
         # Create final results
         result = BenchmarkResult(
@@ -125,12 +179,32 @@ class BenchmarkOrchestrator:
             output_dir=output_dir
         )
 
+        # Store results in database for leaderboard and analysis
+        try:
+            store_benchmark_results(
+                run_id=run_id,
+                timestamp=result.timestamp,
+                config=self.config.to_dict(),
+                results=result,
+                budget_summary=budget_summary
+            )
+            console.print(f"[green]📊 Results stored in database for analysis[/green]")
+        except Exception as e:
+            logger.warning(f"Failed to store results in database: {e}")
+
+        # Display final cost summary
+        if budget_summary and budget_summary.total_cost > 0:
+            console.print(f"\n[bold green]💰 Total benchmark cost: ${budget_summary.total_cost:.4f}[/bold green]")
+            if self.config.budget_limit:
+                percentage = (budget_summary.total_cost / self.config.budget_limit) * 100
+                console.print(f"[cyan]📊 Budget usage: {percentage:.1f}%[/cyan]")
+
         # Display final results
         self.dashboard.display_final_results(result)
 
         return result
 
-    async def _initialize_components(self, stockfish_path: str) -> None:
+    async def _initialize_components(self, engine_path: str, engine_type: str, is_human_engine: bool) -> None:
         """Initialize all components for the benchmark."""
         for bot in self.bots:
             # Initialize LLM client
@@ -144,12 +218,16 @@ class BenchmarkOrchestrator:
 
             # Initialize chess engine (one per bot for isolation)
             try:
-                engine = ChessEngine(stockfish_path, self.config)
+                if is_human_engine and engine_type != "stockfish":
+                    engine = create_human_engine(engine_type, engine_path, self.config)
+                else:
+                    engine = ChessEngine(engine_path, self.config)
+
                 await engine.start()
                 self.engines[bot.name] = engine
-                logger.debug(f"Started engine for {bot.name}")
+                logger.debug(f"Started {engine_type} engine for {bot.name}")
             except Exception as e:
-                logger.error(f"Failed to start engine for {bot.name}: {e}")
+                logger.error(f"Failed to start {engine_type} engine for {bot.name}: {e}")
                 raise
 
             # Initialize state tracking
@@ -216,12 +294,49 @@ def create_argument_parser() -> argparse.ArgumentParser:
   # Custom ELO range
   %(prog)s --preset budget --start-elo 800 --max-elo 1600 --elo-step 200
 
+🧠 Human-like Engine Examples:
+  # Use Maia (most human-like, auto-detected)
+  %(prog)s --preset premium --use-human-engine
+
+  # Specify Maia engine type explicitly
+  %(prog)s --preset budget --use-human-engine --human-engine-type maia
+
+  # Use Leela Chess Zero for human-like play
+  %(prog)s --preset openai --use-human-engine --human-engine-type lczero
+
+  # Human-like Stockfish (fallback option)
+  %(prog)s --preset anthropic --use-human-engine --human-engine-type human_stockfish
+
+  # Custom Maia path
+  %(prog)s --preset premium --use-human-engine --human-engine-path /usr/local/bin/maia
+
 🤖 Bot specification format: "provider:model:name"
   • provider: openai, anthropic, gemini, random
   • model: exact model ID (use --list-models to see available)
   • name: display name for the bot
 
 📋 Available presets: premium, budget, recommended, openai, anthropic, gemini
+
+🏆 Human-like Engines (More Realistic Opponents):
+  • Maia: Neural network trained on human games (most human-like)
+  • LCZero: Neural network with human-like configuration
+  • Human Stockfish: Traditional Stockfish with human-like settings
+
+  Install Maia: https://github.com/CSSLab/maia-chess
+  Install LCZero: brew install lc0 (macOS) or https://lczero.org/
+
+💰 Budget & Analysis Commands:
+  # Track spending with $5 budget limit
+  %(prog)s --preset premium --budget-limit 5.0 --show-costs
+
+  # Show leaderboard of best performing models
+  %(prog)s --leaderboard 10
+
+  # Compare provider performance
+  %(prog)s --provider-stats
+
+  # Analyze specific model
+  %(prog)s --analyze-model openai:gpt-4o
         """
     )
 
@@ -251,11 +366,66 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="List all available presets and exit"
     )
 
+    # Ranking and analysis commands
+    parser.add_argument(
+        "--leaderboard",
+        type=int,
+        nargs="?",
+        const=20,
+        help="Show model leaderboard (default: top 20)"
+    )
+    parser.add_argument(
+        "--provider-stats",
+        action="store_true",
+        help="Show provider performance comparison"
+    )
+    parser.add_argument(
+        "--analyze-model",
+        type=str,
+        help="Analyze specific model performance (format: provider:model)"
+    )
+
+    # Budget tracking
+    parser.add_argument(
+        "--budget-limit",
+        type=float,
+        help="Set budget limit in USD (enables cost tracking and warnings)"
+    )
+    parser.add_argument(
+        "--show-costs",
+        action="store_true",
+        help="Display detailed cost breakdown during and after benchmark"
+    )
+
     # Engine configuration
     parser.add_argument(
         "--stockfish",
         type=str,
         help="Path to Stockfish executable (auto-detected if not specified)"
+    )
+
+    # Human-like engine configuration
+    parser.add_argument(
+        "--use-human-engine",
+        action="store_true",
+        help="Use human-like chess engines instead of Stockfish (more realistic opponents)"
+    )
+    parser.add_argument(
+        "--human-engine-type",
+        type=str,
+        choices=["maia", "lczero", "human_stockfish"],
+        default="maia",
+        help="Type of human-like engine (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--human-engine-path",
+        type=str,
+        help="Path to human-like engine executable (auto-detected if not specified)"
+    )
+    parser.add_argument(
+        "--no-human-engine-fallback",
+        action="store_true",
+        help="Don't fall back to Stockfish if human engines aren't available"
     )
 
     # ELO ladder settings
@@ -372,7 +542,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def configure_logging(verbose: bool = False, debug: bool = False) -> None:
+def configure_logging(verbose: bool = False, debug: bool = False, suppress_console: bool = False) -> None:
     """Configure logging based on command-line options."""
     if debug:
         level = logging.DEBUG
@@ -382,7 +552,25 @@ def configure_logging(verbose: bool = False, debug: bool = False) -> None:
         level = logging.WARNING
 
     # Configure root logger
-    logging.getLogger().setLevel(level)
+    root_logger = logging.getLogger()
+
+    # Remove existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    if not suppress_console:
+        # Add console handler for normal operation
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(
+            logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        )
+        root_logger.addHandler(console_handler)
+    else:
+        # Use null handler to suppress all console output during live display
+        null_handler = logging.NullHandler()
+        root_logger.addHandler(null_handler)
+
+    root_logger.setLevel(level)
 
     # Reduce noise from some libraries
     logging.getLogger("asyncio").setLevel(logging.WARNING)
@@ -415,8 +603,8 @@ def run_unit_tests() -> int:
 
 async def main_async(args: argparse.Namespace) -> int:
     """Main async entry point."""
-    # Configure logging
-    configure_logging(args.verbose, args.debug)
+    # Configure logging (suppress console during live display)
+    configure_logging(args.verbose, args.debug, suppress_console=True)
 
     # Handle information commands
     if args.list_models:
@@ -432,6 +620,19 @@ async def main_async(args: argparse.Namespace) -> int:
             for bot in preset_info['bots']:
                 console.print(f"    • {bot.name} ({bot.provider}:{bot.model})")
             console.print()
+        return 0
+
+    # Handle ranking and analysis commands
+    if args.leaderboard is not None:
+        show_leaderboard(args.leaderboard)
+        return 0
+
+    if args.provider_stats:
+        show_provider_comparison()
+        return 0
+
+    if args.analyze_model:
+        analyze_model(args.analyze_model)
         return 0
 
     # Handle demo mode
@@ -472,6 +673,10 @@ async def main_async(args: argparse.Namespace) -> int:
     config = Config(
         bots=bots_string,
         stockfish_path=args.stockfish,
+        use_human_engine=args.use_human_engine,
+        human_engine_type=args.human_engine_type,
+        human_engine_path=args.human_engine_path,
+        human_engine_fallback=not args.no_human_engine_fallback,
         start_elo=args.start_elo,
         elo_step=args.elo_step,
         max_elo=args.max_elo,
@@ -484,6 +689,10 @@ async def main_async(args: argparse.Namespace) -> int:
         save_pgn=not args.no_pgn,
         refresh_rate=args.refresh_rate
     )
+
+    # Add budget tracking configuration
+    config.budget_limit = args.budget_limit
+    config.show_costs = args.show_costs
 
     # Create and run benchmark
     try:

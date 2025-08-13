@@ -13,6 +13,7 @@ __license__ = "MIT"
 # Core imports
 from .core.models import BotSpec, GameRecord, LadderStats, LiveState
 from .core.engine import ChessEngine
+from .core.human_engine import HumanLikeEngine, MaiaEngine, LeelaEngine, HumanStockfishEngine
 from .core.game import GameRunner
 from .llm.client import LLMClient
 from .ui.dashboard import Dashboard
@@ -24,6 +25,10 @@ __all__ = [
     "LadderStats",
     "LiveState",
     "ChessEngine",
+    "HumanLikeEngine",
+    "MaiaEngine",
+    "LeelaEngine",
+    "HumanStockfishEngine",
     "GameRunner",
     "LLMClient",
     "Dashboard",
