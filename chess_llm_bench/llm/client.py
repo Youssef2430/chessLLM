@@ -12,8 +12,8 @@ import logging
 import random
 import re
 import time
-from typing import List, Optional, Union, Dict, Any, Tuple
 from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple
 import os
 
 import chess
@@ -45,7 +45,8 @@ class BaseLLMProvider(ABC):
         self,
         board: chess.Board,
         temperature: float = 0.0,
-        timeout_s: float = 20.0
+        timeout_s: float = 20.0,
+        move_history: list = []
     ) -> str:
         """
         Generate a move response from the LLM.
@@ -54,6 +55,7 @@ class BaseLLMProvider(ABC):
             board: Current chess position
             temperature: Sampling temperature
             timeout_s: Timeout in seconds
+            move_history: List of previous moves in the game
 
         Returns:
             Raw text response from the LLM
@@ -63,7 +65,7 @@ class BaseLLMProvider(ABC):
         """
         pass
 
-    def _create_chess_prompt(self, board: chess.Board) -> str:
+    def _create_chess_prompt(self, board: chess.Board, move_history: list = None) -> str:
         """Create a standardized chess prompt for the LLM."""
         legal_moves = " ".join(move.uci() for move in board.legal_moves)
         color = "White" if board.turn == chess.WHITE else "Black"
@@ -72,6 +74,33 @@ class BaseLLMProvider(ABC):
         prompt = (
             "You are a strong chess player. Given the position and legal moves, "
             "choose the best move and respond with ONLY the UCI notation (like e2e4 or a7a8q).\n\n"
+        )
+
+        # Add move history if available
+        if move_history and len(move_history) > 0:
+            # Format move history in standard algebraic notation style
+            move_pairs = []
+
+            for i in range(0, len(move_history), 2):
+                move_num = (i // 2) + 1
+                white_move = move_history[i]
+                black_move = move_history[i+1] if i+1 < len(move_history) else ""
+
+                if black_move:
+                    move_pairs.append(f"{move_num}. {white_move} {black_move}")
+                else:
+                    move_pairs.append(f"{move_num}. {white_move}")
+
+            # Join moves and add to prompt
+            move_history_text = "\n".join(move_pairs)
+            prompt += (
+                f"Game history ({len(move_history)} moves so far):\n"
+                f"{move_history_text}\n\n"
+            )
+            logger.debug(f"Added {len(move_history)} moves to prompt history")
+
+        # Add current position information
+        prompt += (
             f"Position (FEN): {board.fen()}\n"
             f"Side to move: {color}\n"
             f"Legal moves (UCI): {legal_moves}\n\n"
@@ -120,10 +149,11 @@ class OpenAIProvider(BaseLLMProvider):
         self,
         board: chess.Board,
         temperature: float = 0.0,
-        timeout_s: float = 20.0
+        timeout_s: float = 20.0,
+        move_history: list = []
     ) -> str:
         """Generate move using OpenAI GPT models."""
-        prompt = self._create_chess_prompt(board)
+        prompt = self._create_chess_prompt(board, move_history)
 
         try:
             response = await asyncio.wait_for(
@@ -221,10 +251,11 @@ class AnthropicProvider(BaseLLMProvider):
         self,
         board: chess.Board,
         temperature: float = 0.0,
-        timeout_s: float = 20.0
+        timeout_s: float = 20.0,
+        move_history: list = []
     ) -> str:
         """Generate move using Anthropic Claude models."""
-        prompt = self._create_chess_prompt(board)
+        prompt = self._create_chess_prompt(board, move_history)
 
         try:
             response = await asyncio.wait_for(
@@ -335,10 +366,11 @@ class GeminiProvider(BaseLLMProvider):
         self,
         board: chess.Board,
         temperature: float = 0.0,
-        timeout_s: float = 20.0
+        timeout_s: float = 20.0,
+        move_history: list = []
     ) -> str:
         """Generate move using Google Gemini models."""
-        prompt = self._create_chess_prompt(board)
+        prompt = self._create_chess_prompt(board, move_history)
 
         try:
             response = await asyncio.wait_for(
@@ -406,18 +438,20 @@ class GeminiProvider(BaseLLMProvider):
 
 
 class RandomProvider(BaseLLMProvider):
-    """Random move provider for testing and baseline comparison."""
+    """Random move provider (baseline)."""
 
     def __init__(self, spec: BotSpec):
+        """Initialize the random move provider."""
         super().__init__(spec)
 
     async def generate_move(
         self,
         board: chess.Board,
         temperature: float = 0.0,
-        timeout_s: float = 20.0
+        timeout_s: float = 20.0,
+        move_history: list = []
     ) -> str:
-        """Generate a random legal move."""
+        """Generate a random valid move."""
         move = self._fallback_random_move(board)
         return move.uci()
 
@@ -466,11 +500,15 @@ class LLMClient:
         self._illegal_move_attempts = 0
         self._move_count = 0
 
+        # Initialize move history tracking
+        self._move_history = []
+
     async def pick_move(
         self,
         board: chess.Board,
         temperature: float = 0.0,
-        timeout_s: float = 20.0
+        timeout_s: float = 20.0,
+        opponent_move: Optional[str] = None
     ) -> chess.Move:
         """
         Generate a legal chess move for the given position.
@@ -493,9 +531,15 @@ class LLMClient:
         start_time = time.time()
         illegal_attempts = 0
 
+        # If opponent just moved, add it to history
+        if opponent_move:
+            self._move_history.append(opponent_move)
+            logger.debug(f"Added opponent move to history: {opponent_move} (moves: {len(self._move_history)})")
+
         try:
-            # Generate move from LLM
-            response = await self.provider.generate_move(board, temperature, timeout_s)
+            # Generate move from LLM with complete game history
+            logger.debug(f"Generating move with history of {len(self._move_history)} previous moves")
+            response = await self.provider.generate_move(board, temperature, timeout_s, self._move_history)
             logger.debug(f"LLM response: {response}")
 
             # Parse and validate move
@@ -503,6 +547,10 @@ class LLMClient:
 
             if move and move in board.legal_moves:
                 logger.debug(f"Selected move: {move.uci()}")
+                # Add the selected move to game history
+                move_uci = move.uci()
+                self._move_history.append(move_uci)
+                logger.debug(f"Added LLM move to history: {move_uci} (moves: {len(self._move_history)})")
                 self._record_move_stats(start_time, illegal_attempts)
                 return move
             elif move:
@@ -511,22 +559,40 @@ class LLMClient:
                 logger.debug(f"Illegal move attempted: {move.uci()}")
 
             # If parsing failed, try SAN notation as fallback
+            # Try SAN notation as fallback
             move = self._try_san_parsing(response, board)
             if move and move in board.legal_moves:
                 logger.debug(f"Parsed SAN move: {move.uci()}")
+                # Add the move to history
+                move_uci = move.uci()
+                self._move_history.append(move_uci)
+                logger.debug(f"Added LLM move (SAN parsed) to history: {move_uci} (moves: {len(self._move_history)})")
                 self._record_move_stats(start_time, illegal_attempts)
                 return move
             elif move:
                 # SAN move was parsed but is illegal
                 illegal_attempts += 1
                 logger.debug(f"Illegal SAN move attempted: {move.uci()}")
+            else:
+                # Both parsing attempts failed
+                illegal_attempts += 1
+                logger.debug("Move parsing failed completely")
 
         except Exception as e:
             logger.warning(f"LLM move generation failed: {e}")
+            illegal_attempts += 1
 
         # Final fallback to random move
         logger.info("Falling back to random move")
+        illegal_attempts += 1  # Count using a random move as an illegal attempt
         fallback_move = self.provider._fallback_random_move(board)
+
+        # Add the fallback move to history
+        fallback_uci = fallback_move.uci()
+        self._move_history.append(fallback_uci)
+        logger.debug(f"Added fallback move to history: {fallback_uci} (moves: {len(self._move_history)})")
+
+        # Record stats with extra illegal attempt for random move
         self._record_move_stats(start_time, illegal_attempts)
         return fallback_move
 
@@ -549,10 +615,11 @@ class LLMClient:
         return (self._total_move_time, self._illegal_move_attempts, avg_time)
 
     def reset_move_stats(self) -> None:
-        """Reset move statistics counters."""
+        """Reset move statistics for a new game."""
         self._total_move_time = 0.0
         self._illegal_move_attempts = 0
         self._move_count = 0
+        self._move_history = []  # Reset move history for new game
 
     def _parse_move(self, response: str, board: chess.Board) -> Optional[chess.Move]:
         """

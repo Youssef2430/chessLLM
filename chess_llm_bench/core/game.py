@@ -171,10 +171,13 @@ class GameRunner:
         """Get a move from the LLM with proper error handling."""
         try:
             state.status = f"vs {state.current_elo} ({self.llm.spec.name} thinking...)"
+            # Get opponent's last move if available
+            opponent_move = state.last_move_uci if state.last_move_uci else None
             move = await self.llm.pick_move(
                 board,
                 temperature=self.config.llm_temperature,
-                timeout_s=self.config.llm_timeout
+                timeout_s=self.config.llm_timeout,
+                opponent_move=opponent_move
             )
             return move
         except Exception as e:
@@ -183,7 +186,11 @@ class GameRunner:
             legal_moves = list(board.legal_moves)
             if not legal_moves:
                 raise Exception("No legal moves available")
-            return legal_moves[0]  # Simple fallback
+            # Count this as an illegal move attempt
+            self.llm._illegal_move_attempts += 1
+            fallback_move = legal_moves[0]  # Simple fallback
+            logger.info(f"Using fallback move: {fallback_move.uci()}")
+            return fallback_move
 
     async def _get_engine_move(self, board: chess.Board, state: LiveState, elo: int) -> chess.Move:
         """Get a move from the chess engine or human-like engine."""
@@ -203,13 +210,14 @@ class GameRunner:
         player_name: str
     ) -> None:
         """Execute a move and update game state."""
+        move_uci = move.uci()
         board.push(move)
 
         # Update live state
         state.board_ascii = str(board)
         state.moves_made = board.ply()
-        state.last_move_uci = move.uci()
-        state.status = f"vs {state.current_elo} (last: {player_name} {move.uci()})"
+        state.last_move_uci = move_uci
+        state.status = f"vs {state.current_elo} (last: {player_name} {move_uci})"
 
         # Update chess board and moves for beautiful rendering
         if hasattr(state, '_chess_board'):
