@@ -233,6 +233,83 @@ class AnthropicProvider(BaseLLMProvider):
             raise LLMProviderError(f"Anthropic completion failed: {e}")
 
 
+class GeminiProvider(BaseLLMProvider):
+    """Google Gemini provider for chess move generation."""
+
+    def __init__(self, spec: BotSpec):
+        super().__init__(spec)
+
+        # Import Google Generative AI only when needed
+        try:
+            import google.generativeai as genai
+            self._genai = genai
+        except ImportError:
+            raise LLMProviderError(
+                "Google Generative AI package not installed. Install with: pip install google-generativeai"
+            )
+
+        # Initialize client
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise LLMProviderError(
+                "GEMINI_API_KEY environment variable is required for Gemini provider"
+            )
+
+        self._genai.configure(api_key=api_key)
+
+        # Set default model if not specified
+        if not spec.model:
+            spec.model = "gemini-1.5-flash"
+
+        # Create the model
+        try:
+            self.model = self._genai.GenerativeModel(spec.model)
+        except Exception as e:
+            raise LLMProviderError(f"Failed to create Gemini model {spec.model}: {e}")
+
+    async def generate_move(
+        self,
+        board: chess.Board,
+        temperature: float = 0.0,
+        timeout_s: float = 20.0
+    ) -> str:
+        """Generate move using Google Gemini models."""
+        prompt = self._create_chess_prompt(board)
+
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(self._call_gemini, prompt, temperature),
+                timeout=timeout_s
+            )
+            return response
+
+        except asyncio.TimeoutError:
+            raise LLMProviderError(f"Gemini request timed out after {timeout_s}s")
+        except Exception as e:
+            raise LLMProviderError(f"Gemini API error: {e}")
+
+    def _call_gemini(self, prompt: str, temperature: float) -> str:
+        """Make synchronous Gemini API call."""
+        try:
+            generation_config = {
+                "temperature": temperature,
+                "max_output_tokens": 16,
+            }
+
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config
+            )
+
+            if not response.text:
+                raise LLMProviderError("Gemini returned empty response")
+
+            return response.text.strip()
+
+        except Exception as e:
+            raise LLMProviderError(f"Gemini completion failed: {e}")
+
+
 class RandomProvider(BaseLLMProvider):
     """Random move provider for testing and baseline comparison."""
 
@@ -262,6 +339,7 @@ class LLMClient:
     PROVIDERS: Dict[str, type[BaseLLMProvider]] = {
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
+        "gemini": GeminiProvider,
         "random": RandomProvider,
     }
 

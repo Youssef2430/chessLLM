@@ -176,3 +176,5 @@ results/
 # Local development overrides
 local_config.py
 dev_config.py
+
+CHANGELOG.md

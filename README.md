@@ -1,320 +1,357 @@
 # 🏆 Chess LLM Benchmark
 
-A comprehensive tool for testing Large Language Models (LLMs) with chess games and assessing their ELO ratings by running them against Stockfish at various difficulty levels.
+**A comprehensive tool for evaluating Large Language Models through chess gameplay against Stockfish at various ELO ratings.**
 
-## 🌟 Features
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-412991.svg)](https://openai.com/)
+[![Anthropic](https://img.shields.io/badge/Anthropic-Claude--3.5-8B5A2B.svg)](https://anthropic.com/)
+[![Google](https://img.shields.io/badge/Google-Gemini--1.5-4285F4.svg)](https://ai.google.dev/)
 
-- **Multi-Provider LLM Support**: OpenAI GPT, Anthropic Claude, and random baseline
-- **ELO Ladder System**: Progressive difficulty testing from beginner to master level
-- **Real-Time Dashboard**: Live terminal UI showing game states, statistics, and progress
-- **Concurrent Testing**: Run multiple bots simultaneously for efficient benchmarking
-- **Robust Move Parsing**: Handles various chess notation formats and LLM response styles
-- **Comprehensive Logging**: Detailed game records with PGN file generation
-- **Flexible Configuration**: Customizable ELO ranges, time controls, and advancement rules
+## ✨ Features
+
+- 🤖 **Multi-Provider Support**: OpenAI GPT models, Anthropic Claude, Google Gemini
+- 🎯 **ELO Ladder System**: Bots climb ratings by defeating Stockfish at increasing difficulty levels
+- 🎨 **Beautiful Terminal UI**: Real-time chess board visualization with rich formatting
+- 📊 **Comprehensive Analytics**: Detailed statistics, win rates, and performance tracking
+- 🎮 **Preset Configurations**: Ready-made model lineups for different use cases
+- 💾 **Game Recording**: All games saved in PGN format with full analysis
+- ⚡ **Concurrent Testing**: Run multiple bots simultaneously for efficient benchmarking
 
 ## 🚀 Quick Start
-
-### Prerequisites
-
-1. **Python 3.8+** installed
-2. **Stockfish chess engine** installed and accessible
-
-```bash
-# Install Stockfish
-# macOS
-brew install stockfish
-
-# Ubuntu/Debian
-sudo apt-get install stockfish
-
-# Windows (with Chocolatey)
-choco install stockfish
-
-# Or download from https://stockfishchess.org/
-```
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/chess-llm-bench.git
-cd chess-llm-bench
+git clone https://github.com/yourusername/chess-llm-benchmark.git
+cd chess-llm-benchmark
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Or install in development mode
-pip install -e .
+# Install Stockfish (required chess engine)
+# macOS:
+brew install stockfish
+
+# Ubuntu/Debian:
+sudo apt-get install stockfish
+
+# Windows:
+choco install stockfish
 ```
 
-### Demo Run
+### Set Up API Keys
+
+Create a `.env` file in the project root:
+
+```env
+OPENAI_API_KEY="your-openai-api-key"
+ANTHROPIC_API_KEY="your-anthropic-api-key"
+GEMINI_API_KEY="your-gemini-api-key"
+```
+
+### Run Your First Benchmark
 
 ```bash
-# Run a quick demo with random bots (no API keys needed)
+# Quick demo with random bots
 python main.py --demo
+
+# Premium models from all providers
+python main.py --preset premium
+
+# Budget-friendly models
+python main.py --preset budget
+
+# OpenAI models only
+python main.py --preset openai
 ```
 
-## 📖 Usage Examples
+## 🤖 Available Models
+
+### 📡 OpenAI Models
+- **GPT-4o** - Latest flagship model with enhanced reasoning
+- **GPT-4o Mini** - Faster, cost-effective variant
+- **GPT-4 Turbo** - High-performance with large context
+- **GPT-3.5 Turbo** - Fast and efficient legacy model
+
+### 📡 Anthropic Models  
+- **Claude 3.5 Sonnet** - Most intelligent Claude model
+- **Claude 3.5 Haiku** - Fast and efficient
+- **Claude 3 Opus** - Most capable legacy model
+- **Claude 3 Haiku** - Budget-friendly option
+
+### 📡 Google Gemini Models
+- **Gemini 1.5 Pro** - Most capable with 1M token context
+- **Gemini 1.5 Flash** - Fast and efficient
+- **Gemini 1.0 Pro** - Legacy model
+
+## 🎯 Preset Configurations
+
+| Preset | Description | Models |
+|--------|-------------|---------|
+| `premium` | Top-tier models from each provider | GPT-4o, GPT-4o Mini, Claude 3.5 Sonnet, Claude 3.5 Haiku, Gemini 1.5 Pro, Gemini 1.5 Flash |
+| `budget` | Cost-effective models with good performance | GPT-4o Mini, GPT-3.5 Turbo, Claude 3.5 Haiku, Claude 3 Haiku, Gemini 1.5 Flash |
+| `recommended` | All recommended models across providers | All ⭐ starred models |
+| `openai` | OpenAI's best models | GPT-4o, GPT-4o Mini |
+| `anthropic` | Anthropic's best models | Claude 3.5 Sonnet, Claude 3.5 Haiku |
+| `gemini` | Google's best models | Gemini 1.5 Pro, Gemini 1.5 Flash |
+
+## 📋 Usage Examples
 
 ### Basic Usage
 
 ```bash
-# Test with random bots
-python main.py --bots "random::bot1,random::bot2"
+# List all available models
+python main.py --list-models
 
-# OpenAI GPT models (set OPENAI_API_KEY first)
-export OPENAI_API_KEY=your-api-key-here
-python main.py --bots "openai:gpt-4o-mini:gpt4o,openai:gpt-3.5-turbo:gpt35"
+# List all presets
+python main.py --list-presets
 
-# Anthropic Claude models (set ANTHROPIC_API_KEY first)
-export ANTHROPIC_API_KEY=your-api-key-here
-python main.py --bots "anthropic:claude-3-haiku:claude"
+# Run with specific preset
+python main.py --preset premium
 
-# Mixed providers
-python main.py --bots "openai:gpt-4o-mini:gpt4o,random::baseline,anthropic:claude-3-haiku:claude"
+# Custom bot lineup
+python main.py --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet"
 ```
 
 ### Advanced Configuration
 
 ```bash
-# Custom ELO range and progression
-python main.py \
-  --bots "openai:gpt-4o-mini:test-bot" \
-  --start-elo 800 \
-  --max-elo 2000 \
-  --elo-step 200 \
-  --think-time 1.0
+# Custom ELO range
+python main.py --preset budget --start-elo 800 --max-elo 1600 --elo-step 200
 
-# Only advance on wins (harder progression)
-python main.py \
-  --bots "openai:gpt-4o-mini:challenger" \
-  --escalate-on on_win \
-  --start-elo 1000 \
-  --elo-step 100
+# Faster games with shorter thinking time
+python main.py --preset openai --think-time 0.1 --max-plies 100
 
-# Custom Stockfish path
-python main.py \
-  --bots "random::test" \
-  --stockfish /path/to/your/stockfish
+# High-temperature creative play
+python main.py --bots "openai:gpt-4o:Creative-GPT" --llm-temperature 0.8
+```
+
+### Demo Modes
+
+```bash
+# Robot battle visualization
+python main.py --robot-demo
+
+# Quick robot demo
+python main.py --quick-robot-demo
+
+# Standard demo with random bots
+python main.py --demo
+```
+
+## 🎮 Live Dashboard
+
+The benchmark features a beautiful real-time terminal dashboard:
+
+```
+╭─────── 🏆 Chess LLM ELO Ladder Benchmark ────────╮
+│  ╭──────────────── 📊 Summary ────────────────╮  │
+│  │ ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━┓ │  │
+│  │ ┃ Bot              ┃ Max ELO ┃ Win Rate  ┃ │  │
+│  │ ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━┩ │  │
+│  │ │ GPT-4o           │    1400 │    67.5%  │ │  │
+│  │ │ Claude 3.5       │    1200 │    55.2%  │ │  │
+│  │ │ Gemini 1.5 Pro   │    1100 │    48.3%  │ │  │
+│  │ └──────────────────┴─────────┴───────────┘ │  │
+│  ╰────────────────────────────────────────────╯  │
+│  ╭──────────────── GPT-4o ────────────────────╮  │
+│  │ Ladder: 600 → 800 → 1000 → 1200 → 1400     │  │
+│  │ ╭─ Move 24 | Last: Nf6+ ──╮Status: vs 1400│  │
+│  │ │  a b c d e f g h       │Current ELO:    │  │
+│  │ │8 ♜   ♝ ♛ ♚ ♝   ♜ 8     │1400           │  │
+│  │ │7 ♟ ♟   ♟   ♟ ♟ ♟ 7     │Color: White   │  │
+│  │ │6       ♞           6     │Moves: 47      │  │
+│  │ │5         ♙         5     │               │  │
+│  │ │4   ♙     ♙         4     │Win Rate: 67.5%│  │
+│  │ │3     ♘   ♗         3     │Games: 8       │  │
+│  │ │2 ♙     ♙   ♙ ♙ ♙   2     │Record: 5W-1D- │  │
+│  │ │1 ♖ ♘ ♗ ♕ ♔     ♖   1     │2L            │  │
+│  │ ╰─────────────────────────╯               │  │
+│  ╰────────────────────────────────────────────╯  │
+╰──────────────────────────────────────────────────╯
+```
+
+## 📊 Results and Analysis
+
+### Output Structure
+
+```
+runs/
+└── YYYYMMDD_HHMMSS/
+    ├── summary.json          # Benchmark results summary
+    ├── config.json           # Configuration used
+    ├── games/                # Individual game PGN files
+    │   ├── gpt4o_vs_stockfish_600.pgn
+    │   └── claude_vs_stockfish_800.pgn
+    └── analysis/             # Performance analysis
+        └── statistics.json
+```
+
+### Performance Metrics
+
+Each bot is evaluated on:
+- **Maximum ELO Reached**: Highest Stockfish rating defeated
+- **Win Rate**: Percentage of games won
+- **Average Game Length**: Moves per game
+- **Opening Performance**: Success with different openings
+- **Endgame Strength**: Performance in late-game positions
+
+## ⚙️ Configuration Options
+
+### Command Line Arguments
+
+```bash
+# Bot Configuration
+--bots "provider:model:name,..."     # Custom bot specification
+--preset PRESET                      # Use predefined bot lineup
+
+# ELO Ladder Settings  
+--start-elo ELO                      # Starting ELO rating (default: 600)
+--elo-step STEP                      # ELO increment per rung (default: 100)  
+--max-elo ELO                        # Maximum ELO to attempt (default: 2400)
+
+# Game Settings
+--think-time SECONDS                 # Thinking time per move (default: 0.3)
+--max-plies COUNT                    # Maximum moves per game (default: 300)
+--escalate-on MODE                   # When to advance: "always" or "on_win"
+
+# LLM Settings
+--llm-timeout SECONDS                # LLM response timeout (default: 20.0)
+--llm-temperature TEMP               # Sampling temperature (default: 0.0)
+
+# Output Settings  
+--output-dir PATH                    # Results directory (default: "runs")
+--save-pgn                          # Save games in PGN format
+
+# Engine Settings
+--stockfish PATH                     # Custom Stockfish executable path
+
+# Display Options
+--verbose                           # Verbose logging
+--debug                             # Debug mode
+--refresh-rate HZ                   # UI refresh rate (default: 6)
 ```
 
 ### Bot Specification Format
 
-Bots are specified using the format: `provider:model:name`
-
-- **provider**: `openai`, `anthropic`, `random`
-- **model**: Model name (can be empty for random provider)
-- **name**: Display name for the bot
+```
+provider:model:name
 
 Examples:
-- `random::baseline` - Random bot named "baseline"
-- `openai:gpt-4o-mini:gpt4o` - OpenAI GPT-4o-mini named "gpt4o"
-- `anthropic:claude-3-haiku:claude` - Anthropic Claude-3-haiku named "claude"
-
-## ⚙️ Configuration Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--bots` | `random::bot1,random::bot2` | Comma-separated bot specifications |
-| `--start-elo` | `600` | Starting ELO rating |
-| `--elo-step` | `100` | ELO increment per ladder rung |
-| `--max-elo` | `2400` | Maximum ELO rating |
-| `--think-time` | `0.3` | Engine thinking time per move (seconds) |
-| `--escalate-on` | `always` | Advance on `always` or `on_win` only |
-| `--llm-timeout` | `20.0` | LLM response timeout (seconds) |
-| `--llm-temperature` | `0.0` | LLM sampling temperature |
-| `--output-dir` | `runs` | Output directory for results |
-| `--no-pgn` | `False` | Skip saving PGN files |
-
-## 🤖 Supported LLM Providers
-
-### OpenAI
-- **Models**: `gpt-4`, `gpt-4-turbo`, `gpt-4o`, `gpt-4o-mini`, `gpt-3.5-turbo`
-- **Setup**: Set `OPENAI_API_KEY` environment variable
-- **Installation**: `pip install openai`
-
-### Anthropic
-- **Models**: `claude-3-opus`, `claude-3-sonnet`, `claude-3-haiku`
-- **Setup**: Set `ANTHROPIC_API_KEY` environment variable
-- **Installation**: `pip install anthropic`
-
-### Random (Baseline)
-- **Purpose**: Baseline comparison and testing
-- **Setup**: No API key required
-- **Behavior**: Selects random legal moves
-
-## 📊 Understanding Results
-
-The benchmark produces several types of output:
-
-### Real-time Dashboard
-- Live board positions and move sequences
-- Current ELO level and game status
-- Win/draw/loss statistics
-- Maximum ELO reached
-
-### Final Results
-- **Max ELO Reached**: Highest ELO level achieved
-- **Games Played**: Total number of games
-- **Win Rate**: Percentage of games won
-- **Performance Rating**: 
-  - 🏆 Excellent (1800+)
-  - ⭐ Good (1400-1799)
-  - 👍 Fair (1000-1399)
-  - 📚 Learning (<1000)
-
-### Game Records
-- PGN files saved in `runs/<timestamp>/<bot_name>/`
-- Complete game notation with metadata
-- Engine ELO and game settings recorded
-
-## 🏗️ Project Structure
-
-```
-chess-llm-bench/
-├── chess_llm_bench/           # Main package
-│   ├── core/                  # Core functionality
-│   │   ├── models.py         # Data models and configuration
-│   │   ├── engine.py         # Chess engine management
-│   │   └── game.py           # Game running logic
-│   ├── llm/                  # LLM providers
-│   │   └── client.py         # LLM client implementations
-│   ├── ui/                   # User interface
-│   │   └── dashboard.py      # Terminal dashboard
-│   └── cli.py                # Command-line interface
-├── tests/                    # Unit tests
-│   ├── test_bots.py         # Bot parsing tests
-│   └── test_engine.py       # Engine functionality tests
-├── main.py                  # Main entry point
-├── requirements.txt         # Python dependencies
-├── setup.py                # Package installation
-└── README.md               # This file
+openai:gpt-4o:GPT-4o
+anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet  
+gemini:gemini-1.5-pro:Gemini-1.5-Pro
+random::Baseline
 ```
 
-## 🔧 Development
+## 🔬 Advanced Features
 
-### Setting Up Development Environment
+### Custom Prompting
 
-```bash
-# Clone and install in development mode
-git clone https://github.com/yourusername/chess-llm-bench.git
-cd chess-llm-bench
-pip install -e ".[dev]"
+The tool uses optimized prompts for chess move generation:
 
-# Run tests
-python -m pytest tests/
-
-# Run self-tests
-python main.py --self-test
-
-# Format code
-black chess_llm_bench/ tests/
-isort chess_llm_bench/ tests/
-
-# Type checking
-mypy chess_llm_bench/
-```
-
-### Adding New LLM Providers
-
-1. Create a new provider class inheriting from `BaseLLMProvider`
-2. Implement the `generate_move` method
-3. Register the provider in `LLMClient.PROVIDERS`
-4. Add tests and documentation
-
-Example:
 ```python
-from chess_llm_bench.llm.client import BaseLLMProvider, LLMClient
-
-class CustomProvider(BaseLLMProvider):
-    async def generate_move(self, board, temperature=0.0, timeout_s=20.0):
-        # Your implementation here
-        pass
-
-# Register the provider
-LLMClient.register_provider("custom", CustomProvider)
+def _create_chess_prompt(self, board: chess.Board) -> str:
+    """Create a standardized chess prompt for the LLM."""
+    legal_moves = " ".join(move.uci() for move in board.legal_moves)
+    color = "White" if board.turn == chess.WHITE else "Black"
+    
+    prompt = (
+        "You are a strong chess player. Given the position and legal moves, "
+        "choose the best move and respond with ONLY the UCI notation.\n\n"
+        f"Position (FEN): {board.fen()}\n"
+        f"Side to move: {color}\n"  
+        f"Legal moves: {legal_moves}\n\n"
+        "Your response must be exactly one legal UCI move."
+    )
+    return prompt
 ```
+
+### Error Handling and Fallbacks
+
+- **Timeout Protection**: LLM requests timeout after 20 seconds
+- **Move Validation**: All moves validated against legal move list  
+- **Fallback System**: Random legal moves when LLM fails
+- **Robust Parsing**: Handles various move notation formats
+
+### Concurrent Execution
+
+Multiple bots run simultaneously with proper async handling:
+
+```python
+# Run all bots concurrently on the ELO ladder
+tasks = []
+for bot_spec in bot_specs:
+    task = asyncio.create_task(
+        self._run_bot_ladder(bot_spec, engine, output_dir)
+    )
+    tasks.append(task)
+
+results = await asyncio.gather(*tasks, return_exceptions=True)
+```
+
+## 📈 Benchmarking Best Practices
+
+### Model Selection
+- Start with **recommended models** for reliable results
+- Use **budget preset** for cost-effective testing
+- Try **premium preset** for cutting-edge performance
+
+### ELO Configuration
+- Begin with **600-1000 ELO** range for initial assessment
+- Use **100 ELO steps** for balanced progression
+- Extend to **2400 ELO** for comprehensive evaluation
+
+### Statistical Significance  
+- Run multiple iterations for reliable statistics
+- Consider different random seeds
+- Analyze both win rates and maximum ELO reached
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+chess-llm-benchmark/
+├── chess_llm_bench/          # Main package
+│   ├── core/                 # Core game logic
+│   ├── llm/                  # LLM providers and models
+│   ├── ui/                   # Terminal UI components  
+│   └── cli.py                # Command-line interface
+├── tests/                    # Test suite
+├── runs/                     # Benchmark results
+├── main.py                   # Entry point
+└── requirements.txt          # Dependencies
+```
+
+### Adding New Providers
+
+1. Create a new provider class in `chess_llm_bench/llm/client.py`
+2. Inherit from `BaseLLMProvider`
+3. Implement `generate_move()` method
+4. Register in `LLMClient.PROVIDERS`
+5. Add model definitions to `chess_llm_bench/llm/models.py`
 
 ### Running Tests
 
 ```bash
-# Run all tests
-python -m pytest
+# Run built-in tests
+python main.py --test
 
-# Run specific test file
-python -m pytest tests/test_bots.py
+# Run with pytest
+pytest tests/ -v
 
-# Run with coverage
-python -m pytest --cov=chess_llm_bench
+# Type checking
+mypy chess_llm_bench/
 
-# Run built-in self-tests
-python main.py --self-test
+# Code formatting  
+black chess_llm_bench/
+isort chess_llm_bench/
 ```
-
-## 📋 Requirements
-
-- Python 3.8 or higher
-- Stockfish chess engine
-- Required Python packages:
-  - `python-chess[engine]>=1.999`
-  - `rich>=13.0.0`
-- Optional packages for LLM providers:
-  - `openai>=1.0.0` (for OpenAI models)
-  - `anthropic>=0.3.0` (for Anthropic models)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Stockfish not found**
-```bash
-# Set explicit path
-export STOCKFISH_PATH=/path/to/stockfish
-python main.py --stockfish /path/to/stockfish
-```
-
-**API Key errors**
-```bash
-# Verify API keys are set
-echo $OPENAI_API_KEY
-echo $ANTHROPIC_API_KEY
-
-# Set API keys
-export OPENAI_API_KEY=your-key-here
-export ANTHROPIC_API_KEY=your-key-here
-```
-
-**Import errors**
-```bash
-# Reinstall dependencies
-pip install -r requirements.txt
-
-# Install in development mode
-pip install -e .
-```
-
-### Debugging
-
-Enable verbose logging:
-```bash
-python main.py --verbose --bots "your:bot:spec"
-
-# Or debug level
-python main.py --debug --bots "your:bot:spec"
-```
-
-## 📈 Performance Tips
-
-1. **Concurrent Testing**: Run multiple bots simultaneously for faster benchmarking
-2. **Appropriate Time Controls**: Balance speed vs. accuracy with `--think-time`
-3. **ELO Step Size**: Larger steps for faster runs, smaller for precision
-4. **Temperature Settings**: Use 0.0 for deterministic results, higher for variety
 
 ## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
-
-### Contribution Guidelines
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -322,29 +359,23 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-### Code Style
-
-- Follow PEP 8 guidelines
-- Use type hints where applicable
-- Add docstrings for public functions and classes
-- Write tests for new functionality
-
-## 📄 License
+## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- [Stockfish](https://stockfishchess.org/) - The powerful chess engine
-- [python-chess](https://github.com/niklasf/python-chess) - Excellent chess library
-- [Rich](https://github.com/Textualize/rich) - Beautiful terminal formatting
-- The chess and AI communities for inspiration and feedback
+- **Stockfish Team** - For the amazing chess engine
+- **OpenAI, Anthropic, Google** - For providing powerful language models
+- **python-chess** - For excellent chess programming library
+- **Rich** - For beautiful terminal formatting
 
-## 📬 Contact
+## 📞 Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com/yourusername/chess-llm-bench/issues)
-- Discussions: [Community discussions](https://github.com/yourusername/chess-llm-bench/discussions)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/chess-llm-benchmark/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/yourusername/chess-llm-benchmark/discussions)  
+- 📧 **Email**: your.email@example.com
 
 ---
 
-*Happy benchmarking! May your LLMs play like grandmasters! ♟️🤖*
+**Made with ♟️ and 🤖 by the Chess LLM Benchmark Team**

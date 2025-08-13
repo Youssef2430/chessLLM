@@ -35,6 +35,14 @@ Installation:
 import sys
 from pathlib import Path
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv is optional
+    pass
+
 # Add the project root to the Python path so we can import our package
 project_root = Path(__file__).parent
 if str(project_root) not in sys.path:

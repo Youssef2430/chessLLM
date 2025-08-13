@@ -7,6 +7,8 @@ rich>=13.0.0
 # LLM Providers (optional - install as needed)
 openai>=1.0.0
 anthropic>=0.3.0
+google-generativeai>=0.3.0
+python-dotenv>=0.19.0
 
 # Development and testing
 pytest>=7.0.0
@@ -14,7 +16,7 @@ pytest-asyncio>=0.21.0
 
 # Type checking (optional)
 mypy>=1.0.0
-types-python-chess
+
 
 # Linting and formatting (optional)
 black>=23.0.0

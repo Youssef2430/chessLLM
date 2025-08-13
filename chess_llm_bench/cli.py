@@ -23,6 +23,7 @@ from .core.models import Config, BotSpec, LiveState, LadderStats, BenchmarkResul
 from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint
 from .core.game import GameRunner, LadderRunner
 from .llm.client import LLMClient, parse_bot_spec
+from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_premium_bot_lineup
 from .ui.dashboard import Dashboard
 from .ui.board import render_robot_battle
 
@@ -193,37 +194,61 @@ class BenchmarkOrchestrator:
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        description="Chess LLM ELO Ladder Benchmark - Test LLMs with chess games",
+        description="🏆 Chess LLM ELO Ladder Benchmark - Test LLMs with chess games",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+🎯 Quick Start Examples:
+  # Premium models (best from each provider)
+  %(prog)s --preset premium
+
+  # Budget-friendly models
+  %(prog)s --preset budget
+
+  # All OpenAI models
+  %(prog)s --preset openai
+
   # Demo with random bots
   %(prog)s --demo
 
-  # OpenAI bots (requires OPENAI_API_KEY)
-  %(prog)s --bots "openai:gpt-4o-mini:gpt4o,openai:gpt-3.5-turbo:gpt35"
-
-  # Mixed providers
-  %(prog)s --bots "openai:gpt-4o-mini:gpt4o,random::baseline,anthropic:claude-3-haiku:claude"
+  # Custom bot lineup
+  %(prog)s --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet"
 
   # Custom ELO range
-  %(prog)s --bots "random::test" --start-elo 800 --max-elo 1600 --elo-step 200
+  %(prog)s --preset budget --start-elo 800 --max-elo 1600 --elo-step 200
 
-Bot specification format: "provider:model:name"
-  • provider: openai, anthropic, random
-  • model: model name (can be empty for random provider)
+🤖 Bot specification format: "provider:model:name"
+  • provider: openai, anthropic, gemini, random
+  • model: exact model ID (use --list-models to see available)
   • name: display name for the bot
 
-Multiple bots separated by commas.
+📋 Available presets: premium, budget, recommended, openai, anthropic, gemini
         """
     )
 
-    # Bot configuration
-    parser.add_argument(
+    # Bot configuration (mutually exclusive with preset)
+    bot_group = parser.add_mutually_exclusive_group()
+    bot_group.add_argument(
         "--bots",
         type=str,
-        default="random::bot1,random::bot2",
-        help="Comma-separated bot specs: provider:model:name (default: %(default)s)"
+        help="Comma-separated bot specs: provider:model:name"
+    )
+    bot_group.add_argument(
+        "--preset",
+        type=str,
+        choices=list(PRESET_CONFIGS.keys()),
+        help="Use a predefined set of bots (premium, budget, recommended, openai, anthropic, gemini)"
+    )
+
+    # Information commands
+    parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="List all available models and exit"
+    )
+    parser.add_argument(
+        "--list-presets",
+        action="store_true",
+        help="List all available presets and exit"
     )
 
     # Engine configuration
@@ -393,6 +418,22 @@ async def main_async(args: argparse.Namespace) -> int:
     # Configure logging
     configure_logging(args.verbose, args.debug)
 
+    # Handle information commands
+    if args.list_models:
+        print_available_models()
+        return 0
+
+    if args.list_presets:
+        console.print("\n🎯 Available Presets\n")
+        for preset_name, preset_info in PRESET_CONFIGS.items():
+            console.print(f"[bold cyan]{preset_name}[/bold cyan]")
+            console.print(f"  {preset_info['description']}")
+            console.print(f"  Models: {len(preset_info['bots'])}")
+            for bot in preset_info['bots']:
+                console.print(f"    • {bot.name} ({bot.provider}:{bot.model})")
+            console.print()
+        return 0
+
     # Handle demo mode
     if args.demo:
         console.print("[bold yellow]Running demo mode[/bold yellow]")
@@ -411,9 +452,25 @@ async def main_async(args: argparse.Namespace) -> int:
         console.print("[bold cyan]🚀 Quick Robot Chess Battle! 🚀[/bold cyan]")
         return await robot_demo_mode(args, quick=True)
 
+    # Determine bot configuration
+    if args.preset:
+        if args.preset not in PRESET_CONFIGS:
+            console.print(f"[red]Error: Unknown preset '{args.preset}'[/red]")
+            return 1
+        bot_specs = PRESET_CONFIGS[args.preset]["bots"]
+        bots_string = format_bot_spec_string(bot_specs)
+        console.print(f"[green]Using preset '{args.preset}': {PRESET_CONFIGS[args.preset]['description']}[/green]")
+    elif args.bots:
+        bots_string = args.bots
+    else:
+        # Default to premium preset
+        console.print("[yellow]No bots specified, using premium preset[/yellow]")
+        bot_specs = get_premium_bot_lineup()
+        bots_string = format_bot_spec_string(bot_specs)
+
     # Create configuration
     config = Config(
-        bots=args.bots,
+        bots=bots_string,
         stockfish_path=args.stockfish,
         start_elo=args.start_elo,
         elo_step=args.elo_step,
