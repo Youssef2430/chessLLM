@@ -22,6 +22,9 @@
 - 💰 **Budget Tracking**: Real-time cost monitoring with spending limits and alerts
 - 🏆 **Performance Ranking**: Historical leaderboards and model comparison system
 
+## 🎰 Run Demo
+![Current State](assets/demo.gif)
+
 ## 🚀 Quick Start
 
 ### Installation

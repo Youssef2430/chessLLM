@@ -178,3 +178,7 @@ local_config.py
 dev_config.py
 
 CHANGELOG.md
+
+
+*.cast
+test_runs/*
