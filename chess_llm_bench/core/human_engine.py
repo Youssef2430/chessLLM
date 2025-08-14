@@ -98,6 +98,13 @@ class HumanLikeEngine:
         if not self._engine:
             raise HumanEngineError("Engine not started")
 
+        # Warn about ELO values below absolute minimum
+        MIN_ELO = 600
+        if elo < MIN_ELO:
+            logger.warning(f"⚠️  Requested ELO {elo} is below absolute minimum of {MIN_ELO}")
+            logger.warning(f"   Human-like engine will attempt configuration but may not provide realistic gameplay")
+            logger.warning(f"   Recommend using ELO {MIN_ELO} or higher for authentic human-like chess behavior")
+
         if self._current_elo == elo:
             return  # Already configured for this ELO
 
@@ -157,15 +164,20 @@ class HumanLikeEngine:
             if not self._engine:
                 raise HumanEngineError("Engine not started")
 
+            # Use fixed time per move for consistent strength
+            move_time = self.config.think_time
+            logger.debug(f"Human engine thinking time: {move_time:.3f}s")
+
             result = await asyncio.to_thread(
                 self._engine.play,
                 board,
-                chess_engine.Limit(time=self.config.think_time)
+                chess_engine.Limit(time=move_time)
             )
 
             if not result.move:
                 raise HumanEngineError("Engine returned no move")
 
+            logger.debug(f"Human engine selected move: {result.move.uci()}")
             return result.move
 
         except Exception as e:
@@ -271,9 +283,15 @@ class HumanLikeEngine:
             1900: "maia-1900"
         }
 
-        # Find closest Maia model
-        closest_elo = min(maia_models.keys(), key=lambda x: abs(x - elo))
-        model_name = maia_models[closest_elo]
+        # For sub-1100 ELOs, use the lowest available Maia model (1100)
+        # as it's the best approximation for beginner play
+        if elo < 1100:
+            model_name = "maia-1100"
+            logger.debug(f"Using maia-1100 model for sub-1100 ELO {elo}")
+        else:
+            # Find closest Maia model for ELO >= 1100
+            closest_elo = min(maia_models.keys(), key=lambda x: abs(x - elo))
+            model_name = maia_models[closest_elo]
 
         try:
             if not self._engine:
@@ -313,30 +331,48 @@ class HumanLikeEngine:
             logger.warning(f"Could not configure LCZero: {e}")
 
     async def _configure_human_stockfish_elo(self, elo: int) -> None:
-        """Configure Stockfish with human-like parameters."""
-        # Use Stockfish but with human-like settings
+        """Configure Stockfish with human-like parameters for any ELO level."""
+        # Use Stockfish but with human-like settings optimized for different ELO ranges
         try:
             if not self._engine:
                 logger.warning("Engine not started for human Stockfish configuration")
                 return
 
             # Stockfish UCI_Elo has minimum value (usually 1320)
-            # For lower ELOs, use Skill Level instead
+            # For lower ELOs, use Skill Level with additional human-like parameters
             if elo >= 1320:
                 config_options = {
                     "UCI_LimitStrength": True,
-                    "UCI_Elo": elo
+                    "UCI_Elo": elo,
+                    # Add some randomness for more human-like play
+                    "MultiPV": 1,
+                    "Contempt": max(-50, min(50, (elo - 1500) // 20))
                 }
             else:
-                # Use skill level for lower ELOs (0-20 scale)
-                skill_level = max(0, min(20, (elo - 600) // 80))
+                # Enhanced skill level mapping for sub-1100 ELOs
+                # More granular mapping for better differentiation at low levels
+                if elo < 600:
+                    skill_level = 0
+                elif elo < 800:
+                    skill_level = max(1, (elo - 500) // 50)  # 1-6 range
+                elif elo < 1100:
+                    skill_level = max(6, (elo - 600) // 40)  # 6-12 range
+                else:  # 1100-1319
+                    skill_level = max(12, min(20, (elo - 900) // 30))  # 12-20 range
+
                 config_options = {
                     "UCI_LimitStrength": False,
-                    "Skill Level": skill_level
+                    "Skill Level": skill_level,
+                    # Additional parameters for more human-like weak play
+                    "Contempt": -20,  # Slightly pessimistic for beginners
+                    "MultiPV": 1,
+                    # Reduce search depth for lower skill levels
+                    "Depth": max(1, min(15, skill_level + 3))
                 }
 
             await asyncio.to_thread(self._engine.configure, config_options)
-            logger.debug(f"Configured human-like Stockfish for ELO {elo} with options: {config_options}")
+            skill_info = f"skill level {config_options.get('Skill Level', 'N/A')}" if elo < 1320 else f"UCI_Elo {elo}"
+            logger.debug(f"Configured human-like Stockfish for ELO {elo} using {skill_info}: {config_options}")
         except chess_engine.EngineError as e:
             logger.warning(f"Could not configure human-like Stockfish: {e}")
 
@@ -411,15 +447,22 @@ def autodetect_human_engines() -> Dict[str, Optional[str]]:
     return engines
 
 
-def get_best_human_engine() -> Optional[tuple[str, str]]:
+def get_best_human_engine(preferred_type: Optional[str] = None) -> Optional[tuple[str, str]]:
     """
     Get the best available human-like engine.
+
+    Args:
+        preferred_type: Preferred engine type ("maia", "lczero", "human_stockfish")
 
     Returns:
         Tuple of (engine_type, path) for the best available engine,
         or None if no human-like engines are available.
     """
     available = autodetect_human_engines()
+
+    # If a preferred type is specified and available, use it
+    if preferred_type and preferred_type in available:
+        return preferred_type, available[preferred_type]
 
     # Priority order: Maia > LCZero > Human Stockfish
     for engine_type in ["maia", "lczero", "human_stockfish"]:

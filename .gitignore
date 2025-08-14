@@ -182,3 +182,9 @@ CHANGELOG.md
 
 *.cast
 test_runs/*
+
+test*.py
+!tests/*
+demo_*.py
+*.md
+!README.md

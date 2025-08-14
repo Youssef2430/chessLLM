@@ -249,6 +249,8 @@ class Dashboard:
         if hasattr(state, 'average_move_time') and state.average_move_time > 0:
             status_lines.append("")
             status_lines.append(f"Current game avg: {state.average_move_time:.2f}s")
+            if hasattr(state, 'game_duration') and state.game_duration > 0:
+                status_lines.append(f"Game time: {state.game_duration:.2f}s")
             if hasattr(state, 'illegal_move_attempts') and state.illegal_move_attempts > 0:
                 status_lines.append(f"Current illegal: {state.illegal_move_attempts}")
 
@@ -405,6 +407,8 @@ class Dashboard:
             summary_lines.append(f"🏆 Best ELO: {bot_stats.max_elo_reached}")
             if bot_stats.total_games > 0:
                 summary_lines.append(f"📊 Performance: {bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L")
+                if hasattr(bot_stats, 'average_game_duration'):
+                    summary_lines.append(f"⏱️ Avg game: {bot_stats.average_game_duration:.2f}s")
 
         timestamp = datetime.now().strftime("%H:%M:%S")
         summary_lines.append(f"⏰ {timestamp}")
@@ -445,7 +449,8 @@ class Dashboard:
         results_table.add_column("Games", style="blue", justify="right")
         results_table.add_column("Win Rate", style="yellow", justify="right")
         results_table.add_column("Record", style="white", justify="center")
-        results_table.add_column("Avg Time", style="bright_magenta", justify="right")
+        results_table.add_column("Avg Move", style="bright_magenta", justify="right")
+        results_table.add_column("Avg Game", style="bright_magenta", justify="right")
         results_table.add_column("Illegal Moves", style="red", justify="right")
         results_table.add_column("Performance", style="magenta")
 
@@ -454,7 +459,8 @@ class Dashboard:
             record = f"{stats.wins}W-{stats.draws}D-{stats.losses}L"
 
             # Timing and illegal move statistics
-            avg_time = f"{stats.average_move_time:.2f}s" if stats.average_move_time > 0 else "—"
+            avg_move_time = f"{stats.average_move_time:.2f}s" if stats.average_move_time > 0 else "—"
+            avg_game_time = f"{stats.average_game_duration:.2f}s" if hasattr(stats, 'average_game_duration') and stats.average_game_duration > 0 else "—"
             illegal_moves = str(stats.total_illegal_moves)
 
             # Performance assessment
@@ -477,7 +483,8 @@ class Dashboard:
                 str(stats.total_games),
                 win_rate,
                 record,
-                avg_time,
+                avg_move_time,
+                avg_game_time,
                 illegal_moves,
                 Text(performance, style=performance_style)
             )
@@ -487,6 +494,14 @@ class Dashboard:
             f"🕐 Completed: {result.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
             f"🎮 Total games: {result.total_games}",
         ]
+
+        # Calculate total game duration
+        total_game_time = 0.0
+        for stat in result.bot_results.values():
+            if hasattr(stat, 'total_game_duration'):
+                total_game_time += stat.total_game_duration
+
+        summary_lines.append(f"⏱️ Total time: {total_game_time:.2f}s")
 
         if result.best_bot:
             summary_lines.append(f"🏆 Best bot: {result.best_bot} (ELO {result.best_elo})")

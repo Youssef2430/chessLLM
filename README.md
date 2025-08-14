@@ -12,6 +12,7 @@
 
 - 🤖 **Multi-Provider Support**: OpenAI GPT models, Anthropic Claude, Google Gemini
 - 🎯 **ELO Ladder System**: Bots climb ratings by defeating Stockfish at increasing difficulty levels
+- 🎯 **Sub-1100 ELO Support**: Test models against beginner-level opponents (ELO 600-1100) with specialized engines and automatic minimum validation
 - 🎨 **Beautiful Terminal UI**: Real-time chess board visualization with rich formatting
 - 📊 **Comprehensive Analytics**: Detailed statistics, win rates, and performance tracking
 - ⏱️ **Move Timing Analysis**: Track response times and speed metrics for each model
@@ -21,6 +22,8 @@
 - ⚡ **Concurrent Testing**: Run multiple bots simultaneously for efficient benchmarking
 - 💰 **Budget Tracking**: Real-time cost monitoring with spending limits and alerts
 - 🏆 **Performance Ranking**: Historical leaderboards and model comparison system
+- 🧠 **Adaptive Chess Engines**: Dynamically switches between engines based on ELO rating
+- ⌛ **Game Duration Tracking**: Measures complete game time including API response times
 
 ## 🎰 Run Demo
 ![Current State](assets/demo.gif)
@@ -84,6 +87,15 @@ GEMINI_API_KEY="your-gemini-api-key"
 # Quick demo with random bots
 python main.py --demo
 
+# Test sub-1100 ELO support (NEW! - 600 ELO minimum enforced)
+python main.py --demo --start-elo 600 --max-elo 1000 --elo-step 100
+
+# Use human-like engines for realistic beginner play
+python main.py --preset budget --use-human-engine --start-elo 700 --max-elo 1200
+
+# Example with automatic ELO correction (500 will be corrected to 600 with warning)
+python main.py --demo --start-elo 500 --max-elo 800
+
 # Premium models from all providers
 python main.py --preset premium
 
@@ -130,21 +142,27 @@ python main.py --preset openai
 | `anthropic` | Anthropic's best models | Claude 3.5 Sonnet, Claude 3.5 Haiku |
 | `gemini` | Google's best models | Gemini 1.5 Pro, Gemini 1.5 Flash |
 
-## 🧠 Human-like Chess Engines
+## 🧠 Human-like & Adaptive Chess Engines
 
-**NEW FEATURE**: Use human-like chess engines instead of traditional Stockfish for more realistic opponents!
+**NEW FEATURES**: 
+- Use human-like chess engines instead of traditional Stockfish for more realistic opponents!
+- Adaptive engine selection automatically switches between engines based on ELO rating!
+- Game duration tracking to measure complete game time including API responses!
 
-Traditional chess engines like Stockfish play perfectly mechanical chess, which may not reflect how human players actually perform. Human-like engines provide more realistic opponents that make human-like decisions and mistakes.
+Traditional chess engines like Stockfish play perfectly mechanical chess, which may not reflect how human players actually perform. Human-like engines provide more realistic opponents that make human-like decisions and mistakes. Additionally, our new adaptive engine system automatically selects the most appropriate engine based on target ELO rating.
 
-### Available Human Engines
+### Available Engines
 
-| Engine | Description | Human-likeness | Installation |
-|--------|-------------|----------------|--------------|
-| **🧠 Maia** | Neural network trained on human games | ⭐⭐⭐⭐⭐ Most realistic | [Maia Chess](https://github.com/CSSLab/maia-chess) |
-| **♟️ LCZero** | Neural network with human-like settings | ⭐⭐⭐⭐ Very good | `brew install lc0` (macOS) |
-| **🤖 Human Stockfish** | Traditional Stockfish with human settings | ⭐⭐⭐ Good fallback | Built-in with Stockfish |
+| Engine | Description | Human-likeness | ELO Range | Installation |
+|--------|-------------|----------------|-----------|--------------|
+| **🧠 Maia** | Neural network trained on human games | ⭐⭐⭐⭐⭐ Most realistic | 1100-2400 | [Maia Chess](https://github.com/CSSLab/maia-chess) |
+| **♟️ LCZero** | Neural network with human-like settings | ⭐⭐⭐⭐ Very good | 1100-2400 | `brew install lc0` (macOS) |
+| **🤖 Human Stockfish** | Traditional Stockfish with human settings | ⭐⭐⭐ Good | 1300-2400 | Built-in with Stockfish |
+| **🧩 Texel** | Specialized for lower ratings | ⭐⭐ Mechanical | 600-1200 | `brew install texel` or [Download](http://www.open-chess.org/viewtopic.php?f=5&t=3070) |
+| **🎮 MadChess** | Good low-ELO simulation | ⭐⭐⭐ Good | 600-1200 | [Download](https://github.com/kevingreenheck/madchess) |
+| **♞ Toga** | Classic engine with weaker settings | ⭐⭐ Mechanical | 600-1300 | [Download](http://www.mediafire.com/file/3jwz4sbgqt2dwd2/TogaII40.zip) |
 
-### Quick Start with Human Engines
+### Quick Start with Human & Adaptive Engines
 
 ```bash
 # Use human-like engines (auto-detected)
@@ -155,6 +173,12 @@ python main.py --preset budget --use-human-engine --human-engine-type maia
 
 # Use Leela Chess Zero for human-like play
 python main.py --preset openai --use-human-engine --human-engine-type lczero
+
+# Use adaptive engine selection (default behavior)
+python main.py --preset budget --adaptive-engines
+
+# Disable adaptive engine selection
+python main.py --preset openai --no-adaptive-engines
 
 # Compare human vs traditional engines
 python examples/human_engine_demo.py --mode comparison
@@ -173,13 +197,15 @@ python install_human_engines.py --engine maia
 python test_human_engines.py --demo
 ```
 
-### Why Use Human Engines?
+### Why Use Human & Adaptive Engines?
 
 - **🎯 More Realistic Assessment**: Human engines make mistakes and play like real players
 - **📈 Better ELO Scaling**: Strength scales more naturally with human-like characteristics
 - **🎲 Move Variation**: Unlike mechanical engines, they show variation in move selection
 - **🧠 Human-like Thinking**: Trained on human games, not perfect engine analysis
 - **⚖️ Fair Evaluation**: Better reflects how LLMs would perform against human opponents
+- **📊 Accurate Low ELO**: Adaptive engine selection provides more accurate low-ELO opponents
+- **🔄 Seamless Transitions**: Automatically switches engines based on target ELO rating
 
 ### Comparison: Human vs Traditional
 
@@ -223,6 +249,9 @@ python main.py --bots "openai:gpt-4o:Creative-GPT" --llm-temperature 0.8
 
 # Cost-controlled testing
 python main.py --preset budget --budget-limit 2.0 --show-costs
+
+# Use adaptive engines for better low-ELO simulation
+python main.py --preset budget --start-elo 600 --max-elo 1800 --adaptive-engines
 ```
 
 ### Demo Modes
@@ -247,6 +276,7 @@ The benchmark features a beautiful real-time terminal dashboard with comprehensi
 **NEW**: The dashboard now tracks detailed performance metrics including:
 
 - **⏱️ Move Timing**: Real-time average move generation time per model
+- **⌛ Game Duration**: Total time per game including API response times
 - **🚫 Illegal Moves**: Count of invalid move attempts (indicates rule understanding)
 - **📈 Live Updates**: Real-time progress tracking during gameplay with immediate state updates
 - **💰 Cost Analysis**: Time-based cost estimation for API usage
@@ -321,6 +351,7 @@ Each bot is evaluated on:
 - **Maximum ELO Reached**: Highest Stockfish rating defeated
 - **Win Rate**: Percentage of games won
 - **Average Game Length**: Moves per game
+- **Game Duration Tracking**: Total time per game including API response times
 - **Move Timing Analysis**: Average time per move and response speed metrics
 - **Move Quality Assessment**: Illegal move attempts and rule comprehension scoring
 - **Opening Performance**: Success with different openings
@@ -336,6 +367,12 @@ Each bot is evaluated on:
 # Bot Configuration
 --bots "provider:model:name,..."     # Custom bot specification
 --preset PRESET                      # Use predefined bot lineup
+
+# Engine Configuration
+--adaptive-engines                   # Use different engines based on ELO (default: enabled)
+--no-adaptive-engines                # Use single engine for all ELO levels
+--use-human-engine                   # Use human-like engines instead of Stockfish
+--human-engine-type TYPE             # Specify: maia, lczero, or human_stockfish
 
 # Budget & Cost Tracking
 --budget-limit AMOUNT                # Set spending limit in USD
@@ -355,6 +392,7 @@ Each bot is evaluated on:
 --think-time SECONDS                 # Thinking time per move (default: 0.3)
 --max-plies COUNT                    # Maximum moves per game (default: 300)
 --escalate-on MODE                   # When to advance: "always" or "on_win"
+                                     # Game duration is automatically tracked
 
 # LLM Settings
 --llm-timeout SECONDS                # LLM response timeout (default: 20.0)
@@ -442,6 +480,8 @@ results = await asyncio.gather(*tasks, return_exceptions=True)
 - Begin with **600-1000 ELO** range for initial assessment
 - Use **100 ELO steps** for balanced progression
 - Extend to **2400 ELO** for comprehensive evaluation
+- Use **adaptive engines** for realistic play across all ELO ranges
+- For low ELO (under 1100), specialized engines like **Texel** or **MadChess** provide more realistic opposition
 
 ### Statistical Significance
 - Run multiple iterations for reliable statistics

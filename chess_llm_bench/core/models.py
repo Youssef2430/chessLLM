@@ -45,6 +45,7 @@ class GameRecord:
     ply_count: int            # Number of half-moves in the game
     path: Path                # Path to saved PGN file
     timestamp: datetime = field(default_factory=datetime.utcnow)
+    game_duration: float = 0.0  # Total game duration in seconds including API response times
 
     @property
     def llm_won(self) -> bool:
@@ -83,6 +84,7 @@ class LadderStats:
     # Timing and move quality stats
     total_move_time: float = 0.0
     total_illegal_moves: int = 0
+    total_game_duration: float = 0.0  # Total duration of all games in seconds
 
     @property
     def total_games(self) -> int:
@@ -122,6 +124,9 @@ class LadderStats:
         else:
             self.draws += 1
 
+        # Add game duration statistics
+        self.add_game_duration(game.game_duration)
+
     def reset(self) -> None:
         """Reset all statistics."""
         self.max_elo_reached = 0
@@ -131,6 +136,7 @@ class LadderStats:
         self.wins = 0
         self.total_move_time = 0.0
         self.total_illegal_moves = 0
+        self.total_game_duration = 0.0
 
     @property
     def average_move_time(self) -> float:
@@ -144,6 +150,17 @@ class LadderStats:
         """Add timing and move quality statistics from a completed game."""
         self.total_move_time += total_time
         self.total_illegal_moves += illegal_moves
+
+    def add_game_duration(self, duration: float) -> None:
+        """Add game duration statistics from a completed game."""
+        self.total_game_duration += duration
+
+    @property
+    def average_game_duration(self) -> float:
+        """Average duration per game."""
+        if self.total_games == 0:
+            return 0.0
+        return self.total_game_duration / self.total_games
 
 
 @dataclass
@@ -165,6 +182,7 @@ class LiveState:
     total_move_time: float = 0.0  # Total time spent generating moves
     average_move_time: float = 0.0  # Average time per move
     illegal_move_attempts: int = 0  # Number of illegal moves attempted
+    game_duration: float = 0.0  # Total game duration in seconds
 
     # Beautiful chess board support
     _chess_board: Optional[chess.Board] = field(default=None, init=False)
@@ -209,12 +227,16 @@ class Config:
     # Bot and game settings
     bots: str = "random::bot1,random::bot2"
     stockfish_path: Optional[str] = None
+    opponent_type: Optional[str] = None  # "stockfish", "maia", "texel", "madchess"
 
     # Human-like engine settings
     use_human_engine: bool = False
     human_engine_type: str = "maia"  # "maia", "lczero", "human_stockfish"
     human_engine_path: Optional[str] = None
     human_engine_fallback: bool = True  # Fall back to stockfish if human engine fails
+
+    # Adaptive engine settings
+    adaptive_elo_engines: bool = True  # Use specialized engines for different ELO ranges
 
     # ELO ladder settings
     start_elo: int = 600

@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, Union, Dict
+from typing import Optional, Tuple, Union, Dict, Any, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .adaptive_engine import AdaptiveEngine
 
 import chess
 import chess.pgn as chess_pgn
@@ -19,6 +23,12 @@ import chess.pgn as chess_pgn
 from .models import Config, GameRecord, LiveState, LadderStats
 from .engine import ChessEngine
 from .human_engine import HumanLikeEngine
+# Import the AdaptiveEngine class at runtime
+AdaptiveEngine = None
+try:
+    from .adaptive_engine import AdaptiveEngine
+except ImportError:
+    pass  # Type will be checked via isinstance, so this is safe
 from ..llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -33,27 +43,28 @@ class GameRunner:
     Supports both traditional engines (Stockfish) and human-like engines (Maia, LCZero).
     """
 
-    def __init__(self, llm_client: LLMClient, engine: Union[ChessEngine, HumanLikeEngine], config: Config):
+    def __init__(self, llm_client: LLMClient, engine: Union[ChessEngine, HumanLikeEngine, Any], config: Config):
         """
         Initialize the game runner.
 
         Args:
             llm_client: LLM client for move generation
-            engine: Chess engine or human-like engine for opponent moves
+            engine: Chess engine, human-like engine or adaptive engine for opponent moves
             config: Global configuration
         """
         self.llm = llm_client
         self.engine = engine
         self.config = config
         self._game_counter = 0
-        self._is_human_engine = isinstance(engine, HumanLikeEngine)
+        self._is_human_engine = isinstance(engine, HumanLikeEngine) or (AdaptiveEngine and isinstance(engine, AdaptiveEngine))
 
     async def play_game(
         self,
         elo: int,
         output_dir: Path,
         state: LiveState,
-        llm_plays_white: Optional[bool] = None
+        llm_plays_white: Optional[bool] = None,
+        opening_moves: Optional[List[str]] = None
     ) -> GameRecord:
         """
         Play a single chess game between the LLM and engine at specified ELO.
@@ -63,6 +74,7 @@ class GameRunner:
             output_dir: Directory to save PGN files
             state: Live state object for UI updates
             llm_plays_white: Force color assignment (None for alternating)
+            opening_moves: List of UCI moves to use as opening (None for no opening)
 
         Returns:
             GameRecord with game results and metadata
@@ -71,6 +83,9 @@ class GameRunner:
             Exception: If game cannot be completed due to critical errors
         """
         self._game_counter += 1
+
+        # Start tracking game duration
+        game_start_time = time.time()
 
         # Determine colors (alternate by default)
         if llm_plays_white is None:
@@ -85,6 +100,23 @@ class GameRunner:
         board = chess.Board()
         game_pgn = self._create_pgn_header(elo, llm_white)
         pgn_node = game_pgn
+
+        # Apply opening moves if provided
+        if opening_moves:
+            logger.info(f"Applying {len(opening_moves)} opening moves")
+            for uci in opening_moves:
+                try:
+                    move = chess.Move.from_uci(uci)
+                    if move in board.legal_moves:
+                        player_name = "Opening"
+                        self._execute_move(board, move, pgn_node, state, player_name)
+                        pgn_node = pgn_node.add_variation(move)
+                    else:
+                        logger.warning(f"Illegal opening move {uci}, skipping remaining opening")
+                        break
+                except Exception as e:
+                    logger.warning(f"Failed to apply opening move {uci}: {e}")
+                    break
 
         # Update live state
         state.current_elo = elo
@@ -143,15 +175,23 @@ class GameRunner:
             # Collect move statistics from LLM
             total_time, illegal_attempts, avg_time = self.llm.get_move_stats()
 
+            # Calculate total game duration
+            game_duration = time.time() - game_start_time
+
             # Update live state with timing info
             state.total_move_time = total_time
             state.average_move_time = avg_time
             state.illegal_move_attempts = illegal_attempts
+            state.game_duration = game_duration
             state.final_result = result
             state.status = f"finished {result} vs {elo}"
 
             logger.info(f"Game completed: {result} in {board.ply()} plies, "
-                       f"avg move time: {avg_time:.2f}s, illegal attempts: {illegal_attempts}")
+                       f"avg move time: {avg_time:.2f}s, illegal attempts: {illegal_attempts}, "
+                       f"total game time: {game_duration:.2f}s")
+
+            # Add game duration to PGN headers
+            game_pgn.headers["GameDuration"] = f"{game_duration:.2f}s"
 
             return GameRecord(
                 elo=elo,
@@ -159,7 +199,8 @@ class GameRunner:
                 result=result,
                 ply_count=board.ply(),
                 path=pgn_path,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.utcnow(),
+                game_duration=game_duration
             )
 
         except Exception as e:
@@ -195,8 +236,12 @@ class GameRunner:
     async def _get_engine_move(self, board: chess.Board, state: LiveState, elo: int) -> chess.Move:
         """Get a move from the chess engine or human-like engine."""
         if self._is_human_engine:
-            engine_name = getattr(self.engine, 'engine_type', 'Human Engine')
-            state.status = f"vs {elo} ({engine_name.title()} thinking...)"
+            if AdaptiveEngine and isinstance(self.engine, AdaptiveEngine):
+                engine_name = self.engine.current_engine_type
+                state.status = f"vs {elo} ({engine_name.title()} thinking...)"
+            else:
+                engine_name = getattr(self.engine, 'engine_type', 'Human Engine')
+                state.status = f"vs {elo} ({engine_name.title()} thinking...)"
         else:
             state.status = f"vs {elo} (Stockfish thinking...)"
         return await self.engine.get_move(board)
@@ -237,9 +282,14 @@ class GameRunner:
 
         # Determine engine name and type
         if self._is_human_engine:
-            engine_type = getattr(self.engine, 'engine_type', 'Human Engine')
-            engine_name = f"{engine_type.title()}({elo})"
-            engine_type_header = "Human-like Engine"
+            if AdaptiveEngine and isinstance(self.engine, AdaptiveEngine):
+                engine_type = self.engine.current_engine_type
+                engine_name = f"{engine_type.title()}({elo})"
+                engine_type_header = "Adaptive Engine"
+            else:
+                engine_type = getattr(self.engine, 'engine_type', 'Human Engine')
+                engine_name = f"{engine_type.title()}({elo})"
+                engine_type_header = "Human-like Engine"
         else:
             engine_name = f"Stockfish({elo})"
             engine_type_header = "Engine"
@@ -262,7 +312,11 @@ class GameRunner:
         game.headers["TimeControl"] = f"{self.config.think_time}s+0"
 
         if self._is_human_engine:
-            game.headers["Engine_Type"] = getattr(self.engine, 'engine_type', 'human')
+            if AdaptiveEngine and isinstance(self.engine, AdaptiveEngine):
+                game.headers["Engine_Type"] = self.engine.current_engine_type
+                game.headers["Adaptive_Engine"] = "True"
+            else:
+                game.headers["Engine_Type"] = getattr(self.engine, 'engine_type', 'human')
 
         return game
 
@@ -348,6 +402,10 @@ class LadderRunner:
         games: list[GameRecord] = []
         losses_at_elo: Dict[int, int] = {}  # Track losses per ELO level
 
+        # Initialize opening book
+        from .openings import OpeningBook
+        opening_book = OpeningBook()
+
         logger.info(f"Starting ladder run: {current_elo} → {max_target_elo} (step: {step})")
 
         while current_elo <= max_target_elo:
@@ -357,38 +415,76 @@ class LadderRunner:
                 losses_at_elo[current_elo] = 0
 
             try:
-                # Play game at current ELO
-                game_record = await self.game_runner.play_game(
+                # Get a balanced pair of openings for both colors
+                opening_white, opening_black = opening_book.get_balanced_pair()
+
+                logger.info(f"Playing with opening: {opening_white[1]} (ECO {opening_white[0]}) as White")
+
+                # Play first game at current ELO (LLM as white)
+                game_record_white = await self.game_runner.play_game(
                     elo=current_elo,
                     output_dir=output_dir,
-                    state=state
+                    state=state,
+                    llm_plays_white=True,
+                    opening_moves=opening_white[2]
                 )
-                games.append(game_record)
+                games.append(game_record_white)
 
                 # Collect timing statistics from LLM
-                total_time, illegal_attempts, _ = self.game_runner.llm.get_move_stats()
+                total_time_white, illegal_attempts_white, _ = self.game_runner.llm.get_move_stats()
 
                 # Update statistics in real-time
-                bot_stats.add_game(game_record)
-                bot_stats.add_timing_stats(total_time, illegal_attempts)
+                bot_stats.add_game(game_record_white)
+                bot_stats.add_timing_stats(total_time_white, illegal_attempts_white)
 
-                # Check if this was a loss
-                if game_record.llm_lost:
-                    losses_at_elo[current_elo] += 1
+                # Reset state for the second game
+                self.game_runner.llm.reset_move_stats()
+                state.status = f"playing as Black at ELO {current_elo}..."
 
-                    # Check if this is the second loss at this ELO
-                    if losses_at_elo[current_elo] >= 2:
-                        logger.info(f"Ladder run ended at ELO {current_elo} (lost twice)")
-                        break
-                    else:
-                        # First loss - give second chance
-                        logger.info(f"First loss at ELO {current_elo}, giving second chance")
-                        state.status = f"retry at {current_elo} (1 loss)..."
-                        await asyncio.sleep(0.5)
-                        continue  # Stay at same ELO for retry
+                logger.info(f"Playing with opening: {opening_black[1]} (ECO {opening_black[0]}) as Black")
 
-                # Determine if we advance based on result (win or draw)
-                should_advance = self._should_advance(game_record)
+                # Play second game with LLM as black
+                game_record_black = await self.game_runner.play_game(
+                    elo=current_elo,
+                    output_dir=output_dir,
+                    state=state,
+                    llm_plays_white=False,
+                    opening_moves=opening_black[2]
+                )
+                games.append(game_record_black)
+
+                # Collect timing statistics for second game
+                total_time_black, illegal_attempts_black, _ = self.game_runner.llm.get_move_stats()
+
+                # Update statistics for second game
+                bot_stats.add_game(game_record_black)
+                bot_stats.add_timing_stats(total_time_black, illegal_attempts_black)
+
+                # Count losses from both games
+                losses_in_pair = 0
+                if game_record_white.llm_lost:
+                    losses_in_pair += 1
+                if game_record_black.llm_lost:
+                    losses_in_pair += 1
+
+                # Add losses to the counter
+                losses_at_elo[current_elo] += losses_in_pair
+
+                # Check total losses at this ELO level
+                if losses_at_elo[current_elo] >= 2:
+                    logger.info(f"Ladder run ended at ELO {current_elo} (accumulated {losses_at_elo[current_elo]} losses). Average game time: {bot_stats.average_game_duration:.2f}s")
+                    break
+                elif losses_in_pair == 1 and losses_at_elo[current_elo] == 1:
+                    # First loss - give second chance
+                    logger.info(f"First loss at ELO {current_elo}, giving second chance")
+                    state.status = f"retry at {current_elo} (1 loss)..."
+                    await asyncio.sleep(0.5)
+                    continue  # Stay at same ELO for retry
+
+                # Determine if we advance based on combined results
+                should_advance_white = self._should_advance(game_record_white)
+                should_advance_black = self._should_advance(game_record_black)
+                should_advance = should_advance_white or should_advance_black
 
                 if should_advance:
                     # Advance to next ELO level
@@ -397,7 +493,7 @@ class LadderRunner:
                     await asyncio.sleep(0.5)  # Brief pause between games
                 else:
                     # This handles cases where escalate_on is "on_win" and we drew
-                    logger.info(f"Ladder run ended at ELO {current_elo} (result: {game_record.result})")
+                    logger.info(f"Ladder run ended at ELO {current_elo} (result: {game_record.result}). Average game time: {bot_stats.average_game_duration:.2f}s")
                     break
 
             except Exception as e:
@@ -406,7 +502,7 @@ class LadderRunner:
                 break
 
         max_elo_reached = max(game.elo for game in games) if games else 0
-        logger.info(f"Ladder run completed. Max ELO reached: {max_elo_reached}")
+        logger.info(f"Ladder run completed. Max ELO reached: {max_elo_reached}. Total game time: {bot_stats.total_game_duration:.2f}s, Average game time: {bot_stats.average_game_duration:.2f}s")
 
         return max_elo_reached, games
 
@@ -429,3 +525,14 @@ class LadderRunner:
         else:
             # Default: advance on wins and draws, stop on losses
             return not game_record.llm_lost
+
+    def get_effective_elo(self) -> Optional[int]:
+        """
+        Get the effective ELO of the current engine.
+
+        Returns:
+            The effective ELO of the engine, or None if not available
+        """
+        if hasattr(self.game_runner.engine, 'effective_elo') and self.game_runner.engine.effective_elo:
+            return self.game_runner.engine.effective_elo
+        return None

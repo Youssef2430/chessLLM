@@ -20,8 +20,9 @@ import chess
 from rich.console import Console
 
 from .core.models import Config, BotSpec, LiveState, LadderStats, BenchmarkResult
-from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint
+from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint, create_engine, autodetect_engine
 from .core.human_engine import HumanLikeEngine, autodetect_human_engines, get_best_human_engine, get_human_engine_installation_hint, create_human_engine
+from .core.adaptive_engine import AdaptiveEngine
 from .core.game import GameRunner, LadderRunner
 from .llm.client import LLMClient, parse_bot_spec
 from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_premium_bot_lineup
@@ -67,7 +68,7 @@ class BenchmarkOrchestrator:
 
         # Runtime state
         self.bots: List[BotSpec] = []
-        self.engines: Dict[str, Union[ChessEngine, HumanLikeEngine]] = {}
+        self.engines: Dict[str, Union[ChessEngine, HumanLikeEngine, AdaptiveEngine]] = {}
         self.clients: Dict[str, LLMClient] = {}
         self.states: Dict[str, LiveState] = {}
         self.stats: Dict[str, LadderStats] = {}
@@ -95,9 +96,27 @@ class BenchmarkOrchestrator:
         except Exception as e:
             raise RuntimeError(f"Invalid bot specification: {e}")
 
-        # Determine engine type and validate
-        if self.config.use_human_engine:
-            # Try to use human-like engine
+        # Determine engine configuration
+        if self.config.opponent_type:
+            # Use explicitly specified opponent type
+            opponent_type = self.config.opponent_type
+            engine_path = None
+
+            if opponent_type == "stockfish":
+                engine_path = autodetect_stockfish(self.config.stockfish_path)
+                if not engine_path:
+                    raise RuntimeError(f"Stockfish not found.\n\n{get_friendly_stockfish_hint()}")
+            elif opponent_type in ("maia", "lczero"):
+                # Will be auto-detected by create_engine
+                pass
+            elif opponent_type in ("texel", "madchess"):
+                # Will be auto-detected by create_engine
+                pass
+
+            logger.info(f"Using specified opponent: {opponent_type}")
+            await self._initialize_components(engine_path, opponent_type, is_human_engine=(opponent_type in ("maia", "lczero")))
+        elif self.config.use_human_engine:
+            # Legacy human engine configuration
             if self.config.human_engine_path and self.config.human_engine_type:
                 engine_path = self.config.human_engine_path
                 engine_type = self.config.human_engine_type
@@ -218,14 +237,17 @@ class BenchmarkOrchestrator:
 
             # Initialize chess engine (one per bot for isolation)
             try:
-                if is_human_engine and engine_type != "stockfish":
-                    engine = create_human_engine(engine_type, engine_path, self.config)
-                else:
-                    engine = ChessEngine(engine_path, self.config)
-
+                # Create appropriate engine using factory
+                engine = create_engine(self.config, engine_path, engine_type)
                 await engine.start()
                 self.engines[bot.name] = engine
-                logger.debug(f"Started {engine_type} engine for {bot.name}")
+
+                # Log the engine type that was started
+                actual_engine_type = (
+                    engine.current_engine_type if isinstance(engine, AdaptiveEngine)
+                    else getattr(engine, 'engine_type', engine_type)
+                )
+                logger.debug(f"Started {actual_engine_type} engine for {bot.name}")
             except Exception as e:
                 logger.error(f"Failed to start {engine_type} engine for {bot.name}: {e}")
                 raise
@@ -288,8 +310,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
   # Custom bot lineup
   %(prog)s --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet"
 
-  # Custom ELO range
-  %(prog)s --preset budget --start-elo 800 --max-elo 1600 --elo-step 200
+  # Custom ELO range with sub-1100 support
+  %(prog)s --preset budget --start-elo 600 --max-elo 1600 --elo-step 100
 
 🧠 Human-like Engine Examples:
   # Use Maia (most human-like, auto-detected)
@@ -315,12 +337,19 @@ def create_argument_parser() -> argparse.ArgumentParser:
 📋 Available presets: premium, budget, recommended, openai, anthropic, gemini
 
 🏆 Human-like Engines (More Realistic Opponents):
-  • Maia: Neural network trained on human games (most human-like)
+  • Maia: Neural network trained on human games (most human-like, ELO 600+)
   • LCZero: Neural network with human-like configuration
   • Human Stockfish: Traditional Stockfish with human-like settings
 
   Install Maia: https://github.com/CSSLab/maia-chess
   Install LCZero: brew install lc0 (macOS) or https://lczero.org/
+
+🎯 Sub-1100 ELO Support:
+  The system supports ELO ratings from 600-2400! For best results at sub-1100 levels:
+  • Install specialized engines: Texel, MadChess, Fruit, or Crafty
+  • Use --use-human-engine for more realistic beginner play
+  • Maia-1100 model will be used for ELO < 1100 when available
+  • WARNING: ELO values below 600 will be automatically corrected to 600
 
 💰 Budget & Analysis Commands:
   # Track spending with $5 budget limit
@@ -398,8 +427,44 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stockfish",
         type=str,
-        help="Path to Stockfish executable (auto-detected if not specified)"
+        help="Path to Stockfish executable (auto-detected if not specified)",
+        dest="stockfish_path",
     )
+
+    parser.add_argument(
+        "--opponent",
+        type=str,
+        choices=["stockfish", "maia", "texel", "madchess"],
+        help="Type of chess engine to use as opponent (default: stockfish)",
+    )
+
+    parser.add_argument(
+        "--opponent-elo",
+        type=int,
+        help="Explicit ELO rating for the opponent engine (minimum: 600, overrides --start-elo)",
+    )
+
+    parser.add_argument(
+        "--movetime-ms",
+        type=int,
+        default=300,
+        help="Fixed time in milliseconds per move for both sides (default: %(default)s)",
+    )
+
+    parser.add_argument(
+        "--adaptive-engines",
+        dest="adaptive_elo_engines",
+        action="store_true",
+        help="Use different engines for different ELO ranges (default: enabled)",
+    )
+
+    parser.add_argument(
+        "--no-adaptive-engines",
+        dest="adaptive_elo_engines",
+        action="store_false",
+        help="Don't use different engines for different ELO ranges",
+    )
+    parser.set_defaults(adaptive_elo_engines=True)
 
     # Human-like engine configuration
     parser.add_argument(
@@ -430,7 +495,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--start-elo",
         type=int,
         default=600,
-        help="Starting ELO rating (default: %(default)s)"
+        help="Starting ELO rating (minimum: 600, default: %(default)s)"
     )
     parser.add_argument(
         "--elo-step",
@@ -442,7 +507,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--max-elo",
         type=int,
         default=2400,
-        help="Maximum ELO rating (default: %(default)s)"
+        help="Maximum ELO rating (minimum: 600, default: %(default)s)"
     )
 
     # Game settings
@@ -450,7 +515,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--think-time",
         type=float,
         default=0.3,
-        help="Engine thinking time per move in seconds (default: %(default)s)"
+        help="Engine thinking time per move in seconds (default: %(default)s, overridden by --movetime-ms if specified)"
     )
     parser.add_argument(
         "--max-plies",
@@ -539,6 +604,33 @@ def create_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def validate_elo_arguments(args) -> None:
+    """Validate ELO arguments and warn about values below minimum threshold."""
+    MIN_ELO = 600
+
+    def warn_low_elo(elo_value: int, arg_name: str) -> int:
+        """Warn about low ELO and return corrected value."""
+        if elo_value < MIN_ELO:
+            logger.warning(f"⚠️  {arg_name} {elo_value} is below absolute minimum of {MIN_ELO} ELO")
+            logger.warning(f"   Automatically correcting {arg_name} to {MIN_ELO}")
+            return MIN_ELO
+        return elo_value
+
+    # Validate start_elo
+    if hasattr(args, 'start_elo') and args.start_elo is not None:
+        args.start_elo = warn_low_elo(args.start_elo, "--start-elo")
+
+    # Validate opponent_elo
+    if hasattr(args, 'opponent_elo') and args.opponent_elo is not None:
+        args.opponent_elo = warn_low_elo(args.opponent_elo, "--opponent-elo")
+
+    # Validate max_elo (less critical but still check)
+    if hasattr(args, 'max_elo') and args.max_elo is not None and args.max_elo < MIN_ELO:
+        logger.warning(f"⚠️  --max-elo {args.max_elo} is below absolute minimum of {MIN_ELO} ELO")
+        logger.warning(f"   Setting max-elo to {MIN_ELO} (same as start-elo)")
+        args.max_elo = MIN_ELO
+
+
 def configure_logging(verbose: bool = False, debug: bool = False, suppress_console: bool = False) -> None:
     """Configure logging based on command-line options."""
     if debug:
@@ -603,6 +695,9 @@ async def main_async(args: argparse.Namespace) -> int:
     # Configure logging (suppress console during live display)
     configure_logging(args.verbose, args.debug, suppress_console=True)
 
+    # Validate ELO arguments and warn about values below minimum
+    validate_elo_arguments(args)
+
     # Handle information commands
     if args.list_models:
         print_available_models()
@@ -636,9 +731,13 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.demo:
         console.print("[bold yellow]Running demo mode[/bold yellow]")
         args.bots = "random::demo1,random::demo2"
-        args.start_elo = 600
-        args.elo_step = 100
-        args.max_elo = 800
+        # Only set demo ELO values if they weren't explicitly changed from defaults
+        if args.start_elo == 600:  # Default value wasn't changed
+            args.start_elo = 1400
+        if args.elo_step == 100:  # Default value wasn't changed
+            args.elo_step = 200
+        if args.max_elo == 2400:  # Default value wasn't changed
+            args.max_elo = 1600
 
     # Handle robot demo mode
     if args.robot_demo:
@@ -666,25 +765,33 @@ async def main_async(args: argparse.Namespace) -> int:
         bot_specs = get_premium_bot_lineup()
         bots_string = format_bot_spec_string(bot_specs)
 
+    # Handle movetime-ms override for think_time if specified
+    if hasattr(args, 'movetime_ms') and args.movetime_ms:
+        think_time = args.movetime_ms / 1000.0
+        logger.info(f"Using fixed move time of {args.movetime_ms}ms ({think_time}s)")
+    else:
+        think_time = args.think_time
+
     # Create configuration
     config = Config(
         bots=bots_string,
-        stockfish_path=args.stockfish,
+        stockfish_path=args.stockfish_path,
         use_human_engine=args.use_human_engine,
         human_engine_type=args.human_engine_type,
         human_engine_path=args.human_engine_path,
         human_engine_fallback=not args.no_human_engine_fallback,
-        start_elo=args.start_elo,
+        start_elo=args.opponent_elo if hasattr(args, 'opponent_elo') and args.opponent_elo else args.start_elo,
         elo_step=args.elo_step,
         max_elo=args.max_elo,
-        think_time=args.think_time,
+        think_time=think_time,
         max_plies=args.max_plies,
         escalate_on=args.escalate_on,
         llm_timeout=args.llm_timeout,
         llm_temperature=args.llm_temperature,
         output_dir=args.output_dir,
         save_pgn=not args.no_pgn,
-        refresh_rate=args.refresh_rate
+        refresh_rate=args.refresh_rate,
+        opponent_type=args.opponent if hasattr(args, 'opponent') else None
     )
 
     # Add budget tracking configuration
@@ -733,19 +840,22 @@ async def robot_demo_mode(args: argparse.Namespace, quick: bool = False) -> int:
             save_pgn=True
         )
 
-    # Find Stockfish
-    stockfish_path = autodetect_stockfish()
-    if not stockfish_path:
-        console.print(f"[red]Error: {get_friendly_stockfish_hint()}[/red]")
-        return 1
+    # Configure engine settings
+    config.adaptive_elo_engines = True
+    config.use_human_engine = True
 
     # Create two robots
     white_bot = LLMClient(parse_bot_spec("random::WhiteBot")[0])
     black_bot = LLMClient(parse_bot_spec("random::BlackBot")[0])
 
-    # Create engine
-    engine = ChessEngine(stockfish_path, config)
-    await engine.start()
+    # Create adaptive engine
+    try:
+        engine = create_engine(config)
+        await engine.start()
+        logger.info(f"Using engine: {engine.current_engine_type if isinstance(engine, AdaptiveEngine) else 'stockfish'}")
+    except Exception as e:
+        console.print(f"[red]Error: Failed to initialize chess engine: {e}[/red]")
+        return 1
 
     # Initialize game
     board = chess.Board()
