@@ -213,6 +213,21 @@ def get_recommended_models(provider: str = None) -> List[ModelInfo]:
     return RECOMMENDED_MODELS
 
 
+def _sanitize_agent_name(display_name: str) -> str:
+    """
+    Sanitize display name for AG2 agent compatibility.
+    AG2 doesn't allow whitespace in agent names.
+
+    Args:
+        display_name: Original display name with possible spaces
+
+    Returns:
+        Sanitized name without spaces, suitable for AG2
+    """
+    # Replace spaces and other problematic characters with hyphens
+    return display_name.replace(" ", "-").replace(".", "")
+
+
 def create_bot_specs(models: List[ModelInfo]) -> List[BotSpec]:
     """
     Create BotSpec objects from ModelInfo objects.
@@ -227,7 +242,7 @@ def create_bot_specs(models: List[ModelInfo]) -> List[BotSpec]:
         BotSpec(
             provider=model.provider,
             model=model.model_id,
-            name=model.display_name
+            name=_sanitize_agent_name(model.display_name)
         )
         for model in models
     ]

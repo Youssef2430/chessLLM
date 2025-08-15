@@ -28,8 +28,12 @@ from .llm.client import LLMClient, parse_bot_spec
 from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_premium_bot_lineup
 from .core.budget import start_budget_tracking, stop_budget_tracking, get_budget_tracker
 from .core.results import store_benchmark_results, show_leaderboard, show_provider_comparison, analyze_model
+from .core.ag2_orchestrator import AG2BenchmarkOrchestrator
 from .ui.dashboard import Dashboard
 from .ui.board import render_robot_battle
+from .puzzle.simple_modern_cli import run_simple_modern_cli
+from .puzzle.cool_stats_cli import run_cool_stats_cli
+from .puzzle.realtime_cli import run_realtime_puzzle_cli
 
 # Set up logging
 # Configure logging to not interfere with live dashboard
@@ -566,6 +570,59 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Dashboard refresh rate in Hz (default: %(default)s)"
     )
 
+    # Puzzle solving settings
+    parser.add_argument(
+        "--puzzles",
+        action="store_true",
+        help="Run puzzle-solving benchmark instead of ELO ladder"
+    )
+    parser.add_argument(
+        "--puzzle-types",
+        type=str,
+        nargs="+",
+        choices=["tactics", "endgames", "blunders", "gamelets", "all"],
+        default=["all"],
+        help="Types of puzzles to include (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--puzzle-difficulty",
+        type=str,
+        default="1-10",
+        help="Difficulty range for puzzles (e.g., '1-5', '3-7', default: %(default)s)"
+    )
+    parser.add_argument(
+        "--puzzle-count",
+        type=int,
+        default=10,
+        help="Number of puzzles per category (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--puzzle-timeout",
+        type=float,
+        default=30.0,
+        help="Maximum time per puzzle in seconds (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--custom-puzzles",
+        type=str,
+        help="Path to custom puzzle file (CSV format: fen,best_move,difficulty,title)"
+    )
+    parser.add_argument(
+        "--cool-stats",
+        action="store_true",
+        help="Use advanced animated stats interface with cool visual effects"
+    )
+    parser.add_argument(
+        "--realtime",
+        action="store_true",
+        help="Use real-time interface with live progress updates and cost tracking"
+    )
+    parser.add_argument(
+        "--use-ag2",
+        action="store_true",
+        help="Use AG2 (AutoGen) multi-agent framework for chess playing (experimental)"
+    )
+
     # Special modes
     parser.add_argument(
         "--demo",
@@ -749,6 +806,11 @@ async def main_async(args: argparse.Namespace) -> int:
         console.print("[bold cyan]🚀 Quick Robot Chess Battle! 🚀[/bold cyan]")
         return await robot_demo_mode(args, quick=True)
 
+    # Handle puzzle mode
+    if args.puzzles:
+        console.print("[bold magenta]🧩 Starting Chess Puzzle Benchmark! 🧩[/bold magenta]")
+        return await puzzle_mode(args)
+
     # Determine bot configuration
     if args.preset:
         if args.preset not in PRESET_CONFIGS:
@@ -776,6 +838,7 @@ async def main_async(args: argparse.Namespace) -> int:
     config = Config(
         bots=bots_string,
         stockfish_path=args.stockfish_path,
+        use_ag2=args.use_ag2,
         use_human_engine=args.use_human_engine,
         human_engine_type=args.human_engine_type,
         human_engine_path=args.human_engine_path,
@@ -798,9 +861,17 @@ async def main_async(args: argparse.Namespace) -> int:
     config.budget_limit = args.budget_limit
     config.show_costs = args.show_costs
 
+    # Add adaptive engine configuration
+    config.adaptive_elo_engines = args.adaptive_elo_engines
+
     # Create and run benchmark
     try:
-        orchestrator = BenchmarkOrchestrator(config)
+        if args.use_ag2:
+            console.print("[bold cyan]🤖 Using AG2 (AutoGen) Multi-Agent Framework[/bold cyan]")
+            orchestrator = AG2BenchmarkOrchestrator(config)
+        else:
+            orchestrator = BenchmarkOrchestrator(config)
+
         result = await orchestrator.run_benchmark()
 
         console.print(f"\n[bold green]Benchmark completed successfully![/bold green]")
@@ -958,7 +1029,187 @@ async def robot_demo_mode(args: argparse.Namespace, quick: bool = False) -> int:
     finally:
         await engine.stop()
 
-    return 0
+    return 1
+
+
+async def puzzle_mode(args: argparse.Namespace) -> int:
+    """
+    Run puzzle-solving benchmark mode with modern CLI.
+    """
+    import csv
+    from datetime import datetime
+    from pathlib import Path
+
+    from .puzzle.database import puzzle_db
+    from .puzzle import PuzzleType
+    from .core.models import BotSpec, Config
+    from .llm.client import parse_bot_spec
+
+    # Parse difficulty range
+    try:
+        if '-' in args.puzzle_difficulty:
+            min_diff, max_diff = map(int, args.puzzle_difficulty.split('-'))
+        else:
+            min_diff = max_diff = int(args.puzzle_difficulty)
+        difficulty_range = (min_diff, max_diff)
+    except ValueError:
+        console.print(f"[red]Error: Invalid difficulty range '{args.puzzle_difficulty}'. Use format like '1-5' or '3'[/red]")
+        return 1
+
+    # Determine bot configuration
+    if args.preset:
+        if args.preset not in PRESET_CONFIGS:
+            console.print(f"[red]Error: Unknown preset '{args.preset}'[/red]")
+            return 1
+        bot_specs = PRESET_CONFIGS[args.preset]["bots"]
+        console.print(f"[bold cyan]🚀 Using preset '{args.preset}': {PRESET_CONFIGS[args.preset]['description']}[/bold cyan]")
+    elif args.bots:
+        try:
+            bot_specs = parse_bot_spec(args.bots)
+        except Exception as e:
+            console.print(f"[red]Error parsing bot specification: {e}[/red]")
+            return 1
+    else:
+        console.print("[yellow]No bots specified, using single premium bot for puzzle testing[/yellow]")
+        bot_specs = [get_premium_bot_lineup()[0]]  # Use first premium bot
+
+    # Create configuration with budget tracking enabled by default for puzzles
+    config = Config(
+        stockfish_path=args.stockfish_path,
+        llm_timeout=args.puzzle_timeout,
+        llm_temperature=args.llm_temperature,
+        output_dir=args.output_dir,
+        budget_limit=args.budget_limit,
+        show_costs=True  # Enable cost tracking by default for puzzles
+    )
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load custom puzzles if specified
+    if args.custom_puzzles:
+        try:
+            custom_puzzle_specs = []
+            with open(args.custom_puzzles, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    custom_puzzle_specs.append((
+                        row['fen'],
+                        row['best_move'],
+                        int(row.get('difficulty', 5))
+                    ))
+
+            if custom_puzzle_specs:
+                console.print(f"[bold green]✅ Loaded {len(custom_puzzle_specs)} custom puzzles[/bold green]")
+        except Exception as e:
+            console.print(f"[red]Error loading custom puzzles: {e}[/red]")
+            return 1
+
+    # Determine puzzle types to run
+    puzzle_types = []
+    if "all" in args.puzzle_types:
+        puzzle_types = [PuzzleType.TACTIC, PuzzleType.ENDGAME, PuzzleType.BLUNDER_AVOID, PuzzleType.GAMELET]
+    else:
+        type_mapping = {
+            "tactics": PuzzleType.TACTIC,
+            "endgames": PuzzleType.ENDGAME,
+            "blunders": PuzzleType.BLUNDER_AVOID,
+            "gamelets": PuzzleType.GAMELET
+        }
+        puzzle_types = [type_mapping[t] for t in args.puzzle_types if t in type_mapping]
+
+    # Show startup info
+    console.print(f"\n[bold cyan]🎯 Concurrent Puzzle Benchmark[/bold cyan]")
+    console.print(f"[dim]• {len(bot_specs)} bot(s) will compete simultaneously[/dim]")
+    console.print(f"[dim]• Puzzle types: {', '.join([t.value for t in puzzle_types])}[/dim]")
+    console.print(f"[dim]• Difficulty range: {min_diff}-{max_diff}[/dim]")
+    console.print(f"[dim]• Puzzles per type: {args.puzzle_count}[/dim]")
+    console.print()
+
+    # Start budget tracking for puzzles
+    from .core.budget import start_budget_tracking, stop_budget_tracking
+    budget_tracker = start_budget_tracking(config.budget_limit)
+    if config.budget_limit:
+        console.print(f"[green]💰 Budget tracking enabled with ${config.budget_limit:.2f} limit[/green]")
+    else:
+        console.print("[green]💰 Cost tracking enabled for puzzle analysis[/green]")
+
+    try:
+        # Choose CLI interface based on user preference
+        if args.realtime:
+            console.print("[bold bright_cyan]⚡ Launching Real-time Analytics Interface! ⚡[/bold bright_cyan]")
+            results = await run_realtime_puzzle_cli(
+                bot_specs=bot_specs,
+                config=config,
+                output_dir=output_dir,
+                puzzle_types=puzzle_types,
+                difficulty_range=difficulty_range,
+                puzzle_count=args.puzzle_count,
+                timeout=args.puzzle_timeout
+            )
+        elif args.cool_stats:
+            console.print("[bold bright_magenta]🎊 Launching Epic Animated Interface! 🎊[/bold bright_magenta]")
+            results = await run_cool_stats_cli(
+                bot_specs=bot_specs,
+                config=config,
+                output_dir=output_dir,
+                puzzle_types=puzzle_types,
+                difficulty_range=difficulty_range,
+                puzzle_count=args.puzzle_count
+            )
+        else:
+            # Run simplified modern concurrent benchmark
+            results = await run_simple_modern_cli(
+                bot_specs=bot_specs,
+                config=config,
+                output_dir=output_dir,
+                puzzle_types=puzzle_types,
+                difficulty_range=difficulty_range,
+                puzzle_count=args.puzzle_count
+            )
+
+        # Save comparison results if multiple bots
+        if len(results) > 1:
+            comparison_file = output_dir / f"puzzle_comparison_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            with open(comparison_file, 'w') as f:
+                f.write("Chess Puzzle Benchmark Comparison\n")
+                f.write("=================================\n\n")
+
+                for bot_name, bot_results in results.items():
+                    if isinstance(bot_results, dict):
+                        total_correct = sum(stats.correct_solutions for stats in bot_results.values())
+                        total_attempts = sum(stats.total_attempts for stats in bot_results.values())
+                        overall_rate = total_correct / total_attempts if total_attempts > 0 else 0.0
+
+                        f.write(f"{bot_name}:\n")
+                        f.write(f"  Overall: {total_correct}/{total_attempts} ({overall_rate*100:.1f}%)\n")
+
+                        for puzzle_set, stats in bot_results.items():
+                            f.write(f"  {puzzle_set}: {stats.correct_solutions}/{stats.total_attempts} "
+                                   f"({stats.success_rate*100:.1f}%)\n")
+                        f.write("\n")
+
+            console.print(f"\n[bold green]📊 Detailed comparison saved to: [cyan]{comparison_file}[/cyan][/bold green]")
+
+        # Stop budget tracking and show summary
+        budget_summary = stop_budget_tracking()
+        if budget_summary:
+            console.print(f"\n[bold bright_yellow]💰 Total Cost: ${budget_summary.total_cost:.4f}[/bold bright_yellow]")
+            if budget_summary.total_cost > 0:
+                console.print(f"[dim]Token usage: {budget_summary.total_tokens:,} tokens[/dim]")
+
+        return 0
+
+    except Exception as e:
+        console.print(f"\n[bold red]❌ Puzzle benchmark failed: {e}[/bold red]")
+        logger.exception("Puzzle benchmark error")
+        return 1
+    finally:
+        # Ensure budget tracking is stopped even on error
+        try:
+            stop_budget_tracking()
+        except:
+            pass
 
 
 def main() -> int:

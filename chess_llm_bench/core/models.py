@@ -229,6 +229,9 @@ class Config:
     stockfish_path: Optional[str] = None
     opponent_type: Optional[str] = None  # "stockfish", "maia", "texel", "madchess"
 
+    # Agent framework settings
+    use_ag2: bool = False  # Use AG2 (AutoGen) multi-agent framework
+
     # Human-like engine settings
     use_human_engine: bool = False
     human_engine_type: str = "maia"  # "maia", "lczero", "human_stockfish"
@@ -242,6 +245,8 @@ class Config:
     start_elo: int = 600
     elo_step: int = 100
     max_elo: int = 2400
+    max_games: int = 100
+    wins_required: int = 2
 
     # Game settings
     think_time: float = 0.3

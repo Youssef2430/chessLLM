@@ -4,6 +4,9 @@ python-chess[engine]>=1.999
 # Rich terminal UI
 rich>=13.0.0
 
+# AG2 (AutoGen) Multi-Agent Framework
+ag2[openai,anthropic,gemini]>=0.9.0
+
 # LLM Providers (optional - install as needed)
 openai>=1.0.0
 anthropic>=0.3.0

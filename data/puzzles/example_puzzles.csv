@@ -1,0 +1,11 @@
+fen,best_move,difficulty,title
+"r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",b5f7,2,Legal's Mate Pattern
+"rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR w KQkq d6 0 3",e5d6,1,En Passant Capture
+"r1bq1rk1/ppp2ppp/2n2n2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R w KQ - 0 7",c3d5,3,Knight Fork
+"6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1",e1e8,4,Back Rank Mate in 2
+"8/8/8/8/8/2k5/2K5/2Q5 w - - 0 1",c1c4,3,Queen vs King Endgame
+"rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",g1f3,2,King's Pawn Opening Development
+"r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",d2d3,4,Avoid Scholar's Mate Trap
+"r2qkb1r/pb1n1ppp/1pn1p3/3pP3/2pP1B2/2N2N2/PPQ2PPP/R3KB1R w KQkq - 0 9",c2c4,5,Queen Sacrifice for Mate
+"8/8/8/4k3/4P3/4K3/8/8 w - - 0 1",e3f3,6,Pawn Endgame Opposition
+"rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2",b1c3,2,Alekhine Defense Response

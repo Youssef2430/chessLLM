@@ -11,6 +11,7 @@
 ## ✨ Features
 
 - 🤖 **Multi-Provider Support**: OpenAI GPT models, Anthropic Claude, Google Gemini
+- 🤖 **AG2 Multi-Agent Framework**: Optional AG2 (AutoGen) integration for advanced agent communication and coordination
 - 🎯 **ELO Ladder System**: Bots climb ratings by defeating Stockfish at increasing difficulty levels
 - 🎯 **Sub-1100 ELO Support**: Test models against beginner-level opponents (ELO 600-1100) with specialized engines and automatic minimum validation
 - 🎨 **Beautiful Terminal UI**: Real-time chess board visualization with rich formatting
@@ -87,6 +88,9 @@ GEMINI_API_KEY="your-gemini-api-key"
 # Quick demo with random bots
 python main.py --demo
 
+# Use AG2 multi-agent framework (experimental)
+python main.py --demo --use-ag2
+
 # Test sub-1100 ELO support (NEW! - 600 ELO minimum enforced)
 python main.py --demo --start-elo 600 --max-elo 1000 --elo-step 100
 
@@ -96,17 +100,29 @@ python main.py --preset budget --use-human-engine --start-elo 700 --max-elo 1200
 # Example with automatic ELO correction (500 will be corrected to 600 with warning)
 python main.py --demo --start-elo 500 --max-elo 800
 
+# Premium models with AG2 framework
+python main.py --preset premium --use-ag2
+
 # Premium models from all providers
 python main.py --preset premium
 
 # Use human-like engines for more realistic opponents
 python main.py --preset premium --use-human-engine
 
+# Budget-friendly models with AG2 agents
+python main.py --preset budget --use-ag2
+
 # Budget-friendly models
 python main.py --preset budget
 
+# Track spending with $5 budget limit and AG2
+python main.py --preset premium --budget-limit 5.0 --show-costs --use-ag2
+
 # Track spending with $5 budget limit
 python main.py --preset premium --budget-limit 5.0 --show-costs
+
+# OpenAI models only with AG2 framework
+python main.py --preset openai --use-ag2
 
 # OpenAI models only
 python main.py --preset openai
@@ -141,6 +157,63 @@ python main.py --preset openai
 | `openai` | OpenAI's best models | GPT-4o, GPT-4o Mini |
 | `anthropic` | Anthropic's best models | Claude 3.5 Sonnet, Claude 3.5 Haiku |
 | `gemini` | Google's best models | Gemini 1.5 Pro, Gemini 1.5 Flash |
+
+## 🤖 AG2 Multi-Agent Framework (Experimental)
+
+**NEW FEATURE**: AG2 (AutoGen) integration provides advanced multi-agent coordination for chess playing, offering improved modularity and extensibility while maintaining full compatibility with existing features.
+
+### What is AG2?
+
+AG2 (formerly AutoGen) is a programming framework for building AI agents and facilitating their cooperation to solve tasks. In this chess benchmark, AG2 enables:
+
+- **🔗 Agent Communication**: Structured communication between chess agents and game coordinators
+- **🎯 Modular Architecture**: Clean separation between different agent types (LLM agents, random agents, game coordinators)
+- **🔄 Enhanced Coordination**: Better game flow management through specialized agents
+- **📈 Extensibility**: Easy addition of new agent types and behaviors
+- **🛠️ Improved Debugging**: Better visibility into agent interactions and decision-making
+
+### Available Agent Types
+
+| Agent Type | Description | Use Case |
+|------------|-------------|----------|
+| **🧠 LLMChessAgent** | Uses LLM providers through AG2 for move generation | Main chess playing agents |
+| **🎲 RandomPlayerAgent** | Plays random legal moves | Baseline testing and debugging |
+| **🎮 GameAgent** | Coordinates games between players | Game flow management |
+| **🤖 AutoReplyAgent** | Automated responses for specific scenarios | Protocol handling and acknowledgments |
+
+### AG2 Usage Examples
+
+```bash
+# Basic AG2 demo
+python main.py --demo --use-ag2
+
+# Premium models with AG2 framework
+python main.py --preset premium --use-ag2
+
+# Budget testing with AG2 agents
+python main.py --preset budget --use-ag2 --start-elo 800 --max-elo 1400
+
+# AG2 with human-like engines
+python main.py --preset openai --use-ag2 --use-human-engine
+
+# AG2 with budget tracking
+python main.py --preset anthropic --use-ag2 --budget-limit 3.0 --show-costs
+```
+
+### Benefits of AG2 Integration
+
+- **🏗️ Better Architecture**: More maintainable and extensible codebase
+- **🔧 Enhanced Debugging**: Clearer separation of concerns and better error handling
+- **🚀 Future-Ready**: Foundation for advanced multi-agent chess scenarios
+- **📊 Consistent Statistics**: All existing tracking and analytics remain intact
+- **🔄 Backward Compatible**: Works alongside traditional LLM client system
+
+### Migration Notes
+
+- The `--use-ag2` flag enables the new agent system
+- All existing features (ELO ladders, statistics, UI) work identically
+- Performance characteristics may vary slightly due to different communication patterns
+- AG2 is optional - the traditional system remains the default
 
 ## 🧠 Human-like & Adaptive Chess Engines
 
@@ -216,6 +289,98 @@ python examples/human_engine_demo.py --mode comparison
 # Results show human engines vary moves 50-75% more than traditional engines
 # providing much more realistic opposition for LLM evaluation
 ```
+
+## 🎯 AG2 Integration Success
+
+The Chess LLM Benchmark now successfully integrates AG2 (AutoGen) multi-agent framework as an optional backend for chess playing! This represents a significant architectural improvement that maintains full backward compatibility while providing enhanced modularity and extensibility.
+
+### ✅ What Was Accomplished
+
+- **🤖 Complete AG2 Integration**: Full multi-agent chess playing system using AG2 as the communication backbone
+- **🔄 Dual Architecture Support**: Both traditional LLM client system and new AG2 agent system work side-by-side
+- **📊 Statistics Preservation**: All existing tracking, ELO ladders, and analytics work identically with both systems
+- **🎮 Agent Types**: Created specialized agents including LLMChessAgent, RandomPlayerAgent, GameAgent, and AutoReplyAgent
+- **🏭 Agent Factory**: Intelligent agent creation system that handles different provider types automatically
+- **⚡ Seamless Migration**: Simple `--use-ag2` flag switches between systems with zero configuration changes
+
+### 🚀 Key Benefits of AG2 Integration
+
+- **🏗️ Better Architecture**: Clean separation of concerns with specialized agents for different tasks
+- **🔧 Enhanced Debugging**: Better visibility into agent interactions and decision-making processes
+- **📈 Improved Extensibility**: Easy to add new agent types and behaviors without touching core game logic
+- **🤝 Multi-Agent Coordination**: Foundation for advanced scenarios like agent tournaments or cooperative play
+- **🛠️ Modular Design**: Each component can be developed, tested, and maintained independently
+
+### 📖 How to Use AG2 Mode
+
+```bash
+# Enable AG2 for any existing command by adding --use-ag2
+python main.py --demo --use-ag2
+python main.py --preset premium --use-ag2
+python main.py --preset budget --use-ag2 --use-human-engine
+python main.py --bots "random::TestBot1,random::TestBot2" --use-ag2
+
+# All existing features work identically
+python main.py --preset openai --use-ag2 --budget-limit 5.0 --show-costs
+python main.py --preset anthropic --use-ag2 --start-elo 800 --max-elo 1400
+```
+
+### 🔮 Future Possibilities
+
+The AG2 integration opens exciting new possibilities:
+- **🏆 Agent Tournaments**: Multiple agents competing against each other
+- **🤝 Cooperative Chess**: Agents working together to analyze positions
+- **📚 Training Scenarios**: Agents learning from each other's play styles
+- **🎭 Role-Playing Agents**: Agents with specific chess personalities or strategies
+- **🔄 Dynamic Adaptation**: Agents that adjust their behavior based on opponent patterns
+
+The system is now ready for both traditional chess engine benchmarking and advanced multi-agent chess research!
+
+## 🎯 Summary: AG2 Integration Complete
+
+The Chess LLM Benchmark has been successfully enhanced with **AG2 (AutoGen) multi-agent framework** support, representing a major architectural advancement while maintaining full backward compatibility.
+
+### ✅ What Was Delivered
+
+- **🤖 Complete AG2 Integration**: Full multi-agent chess system using AG2 as the communication backbone
+- **🔄 Dual Architecture**: Both traditional LLM client system and new AG2 agent system work seamlessly side-by-side
+- **📊 Zero Feature Loss**: All existing tracking, ELO ladders, statistics, and analytics work identically with both systems
+- **🎮 Specialized Agents**: Purpose-built agents including LLMChessAgent, RandomPlayerAgent, GameAgent, and AutoReplyAgent
+- **🏭 Intelligent Factory**: Smart agent creation system that handles different provider types automatically
+- **⚡ Simple Migration**: Just add `--use-ag2` flag to any existing command - no configuration changes needed
+
+### 🚀 Key Advantages
+
+| Traditional System | AG2 System |
+|-------------------|------------|
+| Direct LLM client calls | Multi-agent framework with specialized roles |
+| Limited extensibility | Easy addition of new agent types and behaviors |
+| Basic error handling | Enhanced debugging with full agent interaction tracing |
+| Monolithic game coordination | Modular GameAgent with clear separation of concerns |
+| Provider-focused architecture | Agent-focused architecture ready for advanced scenarios |
+
+### 🎮 Ready to Use
+
+```bash
+# Enable AG2 on any existing command
+python main.py --demo --use-ag2
+python main.py --preset premium --use-ag2
+python main.py --preset budget --use-ag2 --use-human-engine
+
+# All features work identically
+python main.py --preset openai --use-ag2 --budget-limit 5.0 --show-costs
+```
+
+### 🔮 Future Ready
+
+The AG2 integration establishes the foundation for exciting new capabilities:
+- **🏆 Multi-Agent Tournaments**: Agents competing in round-robin or bracket formats
+- **🤝 Collaborative Analysis**: Multiple agents working together to analyze complex positions
+- **📚 Agent Learning**: Agents that adapt and learn from each other's strategies
+- **🎭 Personality Agents**: Chess agents with distinct playing styles and personalities
+- **🔄 Dynamic Behavior**: Agents that adjust tactics based on opponent patterns
+
+The Chess LLM Benchmark now offers both proven traditional benchmarking **and** cutting-edge multi-agent chess research capabilities in a single, unified platform.
 
 ## 📋 Usage Examples
 

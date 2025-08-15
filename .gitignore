@@ -188,3 +188,4 @@ test*.py
 demo_*.py
 *.md
 !README.md
+verify*.py

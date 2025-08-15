@@ -19,6 +19,32 @@ Quick Examples:
     # Custom ELO ladder
     python main.py --bots "random::test" --start-elo 800 --max-elo 1600 --elo-step 200
 
+    # 🧩 CHESS PUZZLE SOLVING BENCHMARKS 🧩
+
+    # Real-time puzzle benchmark with live cost tracking
+    python main.py --puzzles --preset premium --realtime
+
+    # Live progress updates with budget monitoring
+    python main.py --puzzles --bots "openai:gpt-4o:GPT4,anthropic:claude-3-5-sonnet:Claude" --realtime --budget-limit 5.0
+
+    # Real-time tactical analysis with cost breakdown
+    python main.py --puzzles --puzzle-types tactics --puzzle-difficulty 3-7 --realtime --show-costs
+
+    # Animated interface with cool visual effects
+    python main.py --puzzles --preset premium --cool-stats
+
+    # Endgame mastery with live updates
+    python main.py --puzzles --puzzle-types endgames --puzzle-count 25 --realtime
+
+    # Budget-controlled blunder training
+    python main.py --puzzles --puzzle-types blunders --budget-limit 2.0 --realtime
+
+    # Custom puzzles with real-time cost tracking
+    python main.py --puzzles --custom-puzzles data/puzzles/example_puzzles.csv --realtime --show-costs
+
+    # Quick test with live progress (perfect for development)
+    python main.py --puzzles --bots "random::TestBot" --puzzle-count 3 --realtime
+
 Requirements:
     - Python 3.8+
     - Stockfish chess engine installed and in PATH
@@ -39,6 +65,10 @@ from pathlib import Path
 # Suppress gRPC warnings from Google AI client
 os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
 os.environ.setdefault("GRPC_TRACE", "")
+
+# Suppress Pydantic warnings from AG2/AutoGen library
+import warnings
+warnings.filterwarnings("ignore", message=".*Field.*model_client_cls.*conflict with protected namespace.*", category=UserWarning)
 
 # Load environment variables from .env file
 try:
