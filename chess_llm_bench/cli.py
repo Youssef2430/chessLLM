@@ -11,22 +11,21 @@ import argparse
 import asyncio
 import logging
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 import chess
 from rich.console import Console
 
 from .core.models import Config, BotSpec, LiveState, LadderStats, BenchmarkResult
-from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint, create_engine, autodetect_engine
-from .core.human_engine import HumanLikeEngine, autodetect_human_engines, get_best_human_engine, get_human_engine_installation_hint, create_human_engine
+from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint, create_engine
+from .core.human_engine import HumanLikeEngine, get_best_human_engine, get_human_engine_installation_hint
 from .core.adaptive_engine import AdaptiveEngine
 from .core.game import GameRunner, LadderRunner
 from .llm.client import LLMClient, parse_bot_spec
 from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_premium_bot_lineup
-from .core.budget import start_budget_tracking, stop_budget_tracking, get_budget_tracker
+from .core.budget import start_budget_tracking, stop_budget_tracking
 from .core.results import store_benchmark_results, show_leaderboard, show_provider_comparison, analyze_model
 from .ui.dashboard import Dashboard
 from .ui.board import render_robot_battle
@@ -228,9 +227,24 @@ class BenchmarkOrchestrator:
         for bot in self.bots:
             # Initialize LLM client
             try:
-                client = LLMClient(bot)
+                # Check if agent mode is enabled
+                use_agent = getattr(self.config, 'use_agent', False)
+                agent_strategy = getattr(self.config, 'agent_strategy', 'balanced')
+                verbose_agent = getattr(self.config, 'verbose_agent', False)
+
+                client = LLMClient(
+                    bot,
+                    use_agent=use_agent,
+                    agent_strategy=agent_strategy,
+                    verbose_agent=verbose_agent
+                )
+
+                if use_agent:
+                    logger.info(f"Initialized agent-based LLM client: {bot} (strategy: {agent_strategy})")
+                else:
+                    logger.info(f"Initialized LLM client: {bot}")
+
                 self.clients[bot.name] = client
-                logger.info(f"Initialized LLM client: {bot}")
             except Exception as e:
                 logger.error(f"Failed to initialize client for {bot.name}: {e}")
                 raise
@@ -312,6 +326,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
 
   # Custom ELO range with sub-1100 support
   %(prog)s --preset budget --start-elo 600 --max-elo 1600 --elo-step 100
+
+  # Play against fixed opponent strengths
+  %(prog)s --preset premium --fixed-opponent-elo 1200
+  %(prog)s --preset budget --fixed-opponent-elo random
+  %(prog)s --bots "openai:gpt-4o:GPT-4o" --fixed-opponent-elo 800
 
 🧠 Human-like Engine Examples:
   # Use Maia (most human-like, auto-detected)
@@ -445,6 +464,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--fixed-opponent-elo",
+        type=str,
+        choices=["random", "600", "800", "1000", "1200", "1400"],
+        help="Play against a fixed opponent strength instead of climbing a ladder. Available options: random (random legal moves), 600, 800, 1000, 1200, 1400 ELO",
+    )
+
+    parser.add_argument(
         "--movetime-ms",
         type=int,
         default=300,
@@ -543,6 +569,25 @@ def create_argument_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         help="LLM sampling temperature (default: %(default)s)"
+    )
+
+    # Agent mode settings
+    parser.add_argument(
+        "--use-agent",
+        action="store_true",
+        help="Use agent-based reasoning with tools instead of simple prompting"
+    )
+    parser.add_argument(
+        "--agent-strategy",
+        type=str,
+        choices=["fast", "balanced", "deep", "adaptive"],
+        default="balanced",
+        help="Agent thinking strategy (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--verbose-agent",
+        action="store_true",
+        help="Show detailed agent reasoning process"
     )
 
     # Output settings
@@ -772,6 +817,15 @@ async def main_async(args: argparse.Namespace) -> int:
     else:
         think_time = args.think_time
 
+    # Handle fixed opponent ELO
+    fixed_opponent_elo = None
+    if hasattr(args, 'fixed_opponent_elo') and args.fixed_opponent_elo:
+        if args.fixed_opponent_elo == "random":
+            fixed_opponent_elo = 0  # Special value for random moves
+        else:
+            fixed_opponent_elo = int(args.fixed_opponent_elo)
+        console.print(f"[green]Using fixed opponent: {args.fixed_opponent_elo}[/green]")
+
     # Create configuration
     config = Config(
         bots=bots_string,
@@ -783,6 +837,7 @@ async def main_async(args: argparse.Namespace) -> int:
         start_elo=args.opponent_elo if hasattr(args, 'opponent_elo') and args.opponent_elo else args.start_elo,
         elo_step=args.elo_step,
         max_elo=args.max_elo,
+        fixed_opponent_elo=fixed_opponent_elo,
         think_time=think_time,
         max_plies=args.max_plies,
         escalate_on=args.escalate_on,
@@ -791,7 +846,10 @@ async def main_async(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         save_pgn=not args.no_pgn,
         refresh_rate=args.refresh_rate,
-        opponent_type=args.opponent if hasattr(args, 'opponent') else None
+        opponent_type=args.opponent if hasattr(args, 'opponent') else None,
+        use_agent=args.use_agent,
+        agent_strategy=args.agent_strategy,
+        verbose_agent=args.verbose_agent
     )
 
     # Add budget tracking configuration

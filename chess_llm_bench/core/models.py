@@ -242,6 +242,7 @@ class Config:
     start_elo: int = 600
     elo_step: int = 100
     max_elo: int = 2400
+    fixed_opponent_elo: Optional[int] = None  # If set, play against fixed ELO instead of ladder
 
     # Game settings
     think_time: float = 0.3
@@ -251,6 +252,11 @@ class Config:
     # LLM settings
     llm_timeout: float = 20.0
     llm_temperature: float = 0.0
+
+    # Agent settings
+    use_agent: bool = False
+    agent_strategy: str = "balanced"  # "fast", "balanced", "deep", "adaptive"
+    verbose_agent: bool = False
 
     # Output settings
     output_dir: str = "runs"

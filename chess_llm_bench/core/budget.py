@@ -53,21 +53,31 @@ PROVIDER_PRICING = {
         "gpt-4o": ProviderPricing("GPT-4o", 0.0025, 0.01),
         "gpt-4o-mini": ProviderPricing("GPT-4o Mini", 0.00015, 0.0006),
         "gpt-4-turbo": ProviderPricing("GPT-4 Turbo", 0.01, 0.03),
+        "gpt-4": ProviderPricing("GPT-4", 0.03, 0.06),  # Classic GPT-4
         "gpt-3.5-turbo": ProviderPricing("GPT-3.5 Turbo", 0.0005, 0.0015),
+        "gpt-3.5": ProviderPricing("GPT-3.5", 0.0005, 0.0015),  # Alias
     },
     "anthropic": {
         "claude-3-5-sonnet-20241022": ProviderPricing("Claude 3.5 Sonnet", 0.003, 0.015),
+        "claude-3-5-sonnet": ProviderPricing("Claude 3.5 Sonnet", 0.003, 0.015),  # Alias
         "claude-3-5-haiku-20241022": ProviderPricing("Claude 3.5 Haiku", 0.0008, 0.004),
+        "claude-3-5-haiku": ProviderPricing("Claude 3.5 Haiku", 0.0008, 0.004),  # Alias
         "claude-3-opus-20240229": ProviderPricing("Claude 3 Opus", 0.015, 0.075),
+        "claude-3-opus": ProviderPricing("Claude 3 Opus", 0.015, 0.075),  # Alias
         "claude-3-haiku-20240307": ProviderPricing("Claude 3 Haiku", 0.00025, 0.00125),
+        "claude-3-haiku": ProviderPricing("Claude 3 Haiku", 0.00025, 0.00125),  # Alias
+        "claude-3": ProviderPricing("Claude 3", 0.003, 0.015),  # Generic Claude 3
     },
     "gemini": {
         "gemini-1.5-pro": ProviderPricing("Gemini 1.5 Pro", 0.00125, 0.005),
         "gemini-1.5-flash": ProviderPricing("Gemini 1.5 Flash", 0.000075, 0.0003),
         "gemini-1.0-pro": ProviderPricing("Gemini 1.0 Pro", 0.0005, 0.0015),
+        "gemini-pro": ProviderPricing("Gemini Pro", 0.0005, 0.0015),  # Alias for gemini-1.0-pro
+        "gemini": ProviderPricing("Gemini", 0.0005, 0.0015),  # Generic alias
     },
     "random": {
         "random": ProviderPricing("Random Bot", 0.0, 0.0),
+        "": ProviderPricing("Random Bot", 0.0, 0.0),  # Empty model name for random
     }
 }
 
@@ -183,8 +193,24 @@ class BudgetTracker:
     def get_pricing(self, provider: str, model: str) -> Optional[ProviderPricing]:
         """Get pricing information for a provider/model combination."""
         provider_prices = PROVIDER_PRICING.get(provider.lower())
-        if provider_prices:
-            return provider_prices.get(model)
+        if not provider_prices:
+            return None
+
+        # Try exact match first
+        pricing = provider_prices.get(model)
+        if pricing:
+            return pricing
+
+        # Try lowercase match
+        pricing = provider_prices.get(model.lower())
+        if pricing:
+            return pricing
+
+        # Try partial matches for common model name variations
+        for model_key, pricing in provider_prices.items():
+            if model.lower() in model_key.lower() or model_key.lower() in model.lower():
+                return pricing
+
         return None
 
     def record_usage(
