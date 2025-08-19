@@ -12,6 +12,7 @@
 
 - 🤖 **Multi-Provider Support**: OpenAI GPT models, Anthropic Claude, Google Gemini
 - 🎯 **ELO Ladder System**: Bots climb ratings by defeating Stockfish at increasing difficulty levels
+- 🎯 **Fixed Opponent Mode**: Play against specific ELO ratings (600, 800, 1000, 1200, 1400) or random opponents
 - 🎯 **Sub-1100 ELO Support**: Test models against beginner-level opponents (ELO 600-1100) with specialized engines and automatic minimum validation
 - 🎨 **Beautiful Terminal UI**: Real-time chess board visualization with rich formatting
 - 📊 **Comprehensive Analytics**: Detailed statistics, win rates, and performance tracking
@@ -110,6 +111,11 @@ python main.py --preset premium --budget-limit 5.0 --show-costs
 
 # OpenAI models only
 python main.py --preset openai
+
+# NEW: Fixed Opponent Mode - Play against specific difficulty levels
+python main.py --preset premium --fixed-opponent-elo 1200
+python main.py --preset budget --fixed-opponent-elo random
+python main.py --use-agent --show-costs --budget-limit 10.0 --preset premium --fixed-opponent-elo 800
 ```
 
 ## 🤖 Available Models
