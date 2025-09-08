@@ -1,30 +1,24 @@
 # 🏆 Chess LLM Benchmark
 
-**A comprehensive tool for evaluating Large Language Models through chess gameplay against Stockfish at various ELO ratings.**
+**A streamlined tool for evaluating Large Language Models through chess gameplay with simple, focused testing options.**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-412991.svg)](https://openai.com/)
 [![Anthropic](https://img.shields.io/badge/Anthropic-Claude--3.5-8B5A2B.svg)](https://anthropic.com/)
-[![Google](https://img.shields.io/badge/Google-Gemini--1.5-4285F4.svg)](https://ai.google.dev/)
+[![Google](https://img.shields.io/badge/Google-Gemini--2.5-4285F4.svg)](https://ai.google.dev/)
 
 ## ✨ Features
 
-- 🤖 **Multi-Provider Support**: OpenAI GPT models, Anthropic Claude, Google Gemini
-- 🎯 **ELO Ladder System**: Bots climb ratings by defeating Stockfish at increasing difficulty levels
-- 🎯 **Fixed Opponent Mode**: Play against specific ELO ratings (600, 800, 1000, 1200, 1400) or random opponents
-- 🎯 **Sub-1100 ELO Support**: Test models against beginner-level opponents (ELO 600-1100) with specialized engines and automatic minimum validation
+- 🤖 **Multi-Provider Support**: Latest models from OpenAI, Anthropic, and Google
+- 🎯 **Simple Opponent Selection**: Choose between random moves or 600 ELO engine
+- 🧠 **Dual Playing Modes**: Prompt-based (default) or agent-based reasoning with tools
 - 🎨 **Beautiful Terminal UI**: Real-time chess board visualization with rich formatting
-- 📊 **Comprehensive Analytics**: Detailed statistics, win rates, and performance tracking
-- ⏱️ **Move Timing Analysis**: Track response times and speed metrics for each model
-- 🚫 **Illegal Move Detection**: Monitor rule understanding and invalid move attempts
-- 🎮 **Preset Configurations**: Ready-made model lineups for different use cases
-- 💾 **Game Recording**: All games saved in PGN format with full analysis
-- ⚡ **Concurrent Testing**: Run multiple bots simultaneously for efficient benchmarking
-- 💰 **Budget Tracking**: Real-time cost monitoring with spending limits and alerts
-- 🏆 **Performance Ranking**: Historical leaderboards and model comparison system
-- 🧠 **Adaptive Chess Engines**: Dynamically switches between engines based on ELO rating
-- ⌛ **Game Duration Tracking**: Measures complete game time including API response times
+- 📁 **Performance Analytics**: Win rates, timing analysis, and game statistics
+- 💰 **Budget Tracking**: Real-time cost monitoring with spending limits
+- 🏆 **Historical Leaderboards**: Compare model performance over time
+- 💾 **Game Recording**: All games saved in PGN format
+- 📦 **Model Presets**: Latest (default) or legacy model collections
 
 ## 🎰 Run Demo
 ![Current State](assets/demo.gif)
@@ -50,26 +44,6 @@ sudo apt-get install stockfish
 
 # Windows:
 choco install stockfish
-
-# Optional: Install human-like engines for more realistic opponents
-# Maia (most human-like, manual installation required):
-#   Visit: https://github.com/CSSLab/maia-chess
-
-# LCZero (neural network engine):
-# macOS:
-brew install lc0
-
-# Ubuntu/Debian:
-sudo apt-get install lc0
-
-# Or use the installation helper:
-python install_human_engines.py --engine all
-```
-
-
-# Or install specific human engines:
-python install_human_engines.py --engine maia  # Most human-like (recommended)
-python install_human_engines.py --engine lczero  # Neural network based
 ```
 
 ### Set Up API Keys
@@ -85,208 +59,259 @@ GEMINI_API_KEY="your-gemini-api-key"
 ### Run Your First Benchmark
 
 ```bash
-# Quick demo with random bots
-python main.py --demo
+# Default: Latest models vs random opponent, prompt-based
+python main.py
 
-# Test sub-1100 ELO support (NEW! - 600 ELO minimum enforced)
-python main.py --demo --start-elo 600 --max-elo 1000 --elo-step 100
+# Use legacy models with cost tracking
+python main.py --preset legacy --budget-limit 5.0 --show-costs
 
-# Use human-like engines for realistic beginner play
-python main.py --preset budget --use-human-engine --start-elo 700 --max-elo 1200
+# Agent-based reasoning against 600 ELO opponent
+python main.py --use-agent --opponent lowest-elo
 
-# Example with automatic ELO correction (500 will be corrected to 600 with warning)
-python main.py --demo --start-elo 500 --max-elo 800
+# Custom model selection
+python main.py --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet:Claude-Sonnet"
 
-# Premium models from all providers
-python main.py --preset premium
-
-# Use human-like engines for more realistic opponents
-python main.py --preset premium --use-human-engine
-
-# Budget-friendly models
-python main.py --preset budget
-
-# Track spending with $5 budget limit
-python main.py --preset premium --budget-limit 5.0 --show-costs
-
-# OpenAI models only
-python main.py --preset openai
-
-# NEW: Fixed Opponent Mode - Play against specific difficulty levels
-python main.py --preset premium --fixed-opponent-elo 1200
-python main.py --preset budget --fixed-opponent-elo random
-python main.py --use-agent --show-costs --budget-limit 10.0 --preset premium --fixed-opponent-elo 800
+# View performance leaderboard
+python main.py --leaderboard 10
 ```
+
+## 📏 Project Structure
+
+```
+chess-llm-benchmark/
+├── main.py                    # Entry point
+├── requirements.txt           # Dependencies
+├── setup.py                   # Package configuration
+├── .env.example               # API key template
+├── README.md                  # This file
+│
+├── chess_llm_bench/           # Main package
+│   ├── __init__.py
+│   ├── cli.py                 # Command-line interface
+│   │
+│   ├── core/                  # Core game logic
+│   │   ├── models.py          # Data models and configuration
+│   │   ├── engine.py          # Chess engine management
+│   │   ├── game.py            # Game execution and ladder logic
+│   │   ├── budget.py          # Cost tracking and budget management
+│   │   └── results.py         # Database storage and ranking system
+│   │
+│   ├── llm/                   # LLM integration
+│   │   ├── client.py          # Unified LLM client interface
+│   │   ├── models.py          # Model definitions and presets
+│   │   └── agents/            # Agent-based reasoning
+│   │       ├── __init__.py
+│   │       ├── base_agent.py     # Agent base classes
+│   │       ├── chess_tools.py    # Chess analysis tools
+│   │       └── llm_agent_provider.py  # LLM agent implementation
+│   │
+│   └── ui/                    # User interface
+│       ├── dashboard.py       # Live terminal dashboard
+│       └── board.py           # Chess board visualization
+│
+├── examples/                  # Example scripts and demos
+│   ├── agent_demo.py          # Agent vs prompt comparison
+│   └── budget_and_ranking_demo.py  # Cost and ranking examples
+│
+├── tests/                     # Test suite
+│   ├── test_agents.py
+│   ├── test_bots.py
+│   └── test_engine.py
+│
+└── runs/                      # Benchmark results and PGN files
+    └── YYYYMMDD_HHMMSS/       # Timestamped run directories
+        ├── config.json        # Run configuration
+        ├── summary.json       # Results summary
+        └── games/             # Individual game PGN files
+```
+
+## 📊 System Architecture
+
+```mermaid
+flowchart TD
+    A[main.py] --> B[CLI Parser]
+    B --> C{Command Type}
+    
+    C -->|Benchmark| D[BenchmarkOrchestrator]
+    C -->|Leaderboard| E[RankingSystem]
+    C -->|List Models| F[ModelInfo]
+    
+    D --> G[Config]
+    D --> H[LLM Client]
+    D --> I[Chess Engine]
+    D --> J[Dashboard]
+    
+    G --> K[Model Presets]
+    K --> L[Latest Models]
+    K --> M[Legacy Models]
+    
+    H --> N{Playing Mode}
+    N -->|Prompt| O[Direct LLM Call]
+    N -->|Agent| P[Agent with Tools]
+    
+    P --> Q[Chess Analysis Tools]
+    Q --> R[Position Evaluation]
+    Q --> S[Move Analysis]
+    Q --> T[Strategic Planning]
+    
+    I --> U{Opponent Type}
+    U -->|Random| V[Random Move Generator]
+    U -->|600 ELO| W[Stockfish at 600]
+    
+    D --> X[Game Runner]
+    X --> Y[Move Generation Loop]
+    Y --> H
+    Y --> I
+    Y --> Z[Move Validation]
+    
+    Z --> AA[Game Recording]
+    AA --> BB[PGN Files]
+    AA --> CC[Statistics Update]
+    
+    CC --> DD[Budget Tracker]
+    DD --> EE[Cost Calculation]
+    DD --> FF[Budget Warnings]
+    
+    CC --> GG[Results Database]
+    GG --> HH[SQLite Storage]
+    HH --> E
+    
+    J --> II[Live Display]
+    II --> JJ[Chess Board Rendering]
+    II --> KK[Statistics Display]
+    II --> LL[Cost Display]
+    
+    style A fill:#e1f5fe
+    style D fill:#f3e5f5
+    style H fill:#fff3e0
+    style I fill:#e8f5e8
+    style GG fill:#fce4ec
+    style J fill:#f1f8e9
+```
+
+### Key Components:
+
+1. **CLI Layer**: Handles command parsing and user interaction
+2. **Orchestration Layer**: Coordinates all components for benchmark execution
+3. **LLM Layer**: Manages different LLM providers and playing modes
+4. **Engine Layer**: Handles chess opponents (random or ELO-based)
+5. **Game Layer**: Executes chess games and validates moves
+6. **Storage Layer**: Persists results and manages historical data
+7. **UI Layer**: Provides real-time visualization and feedback
+8. **Budget Layer**: Tracks costs and enforces spending limits
 
 ## 🤖 Available Models
 
-### 📡 OpenAI Models
-- **GPT-4o** - Latest flagship model with enhanced reasoning
-- **GPT-4o Mini** - Faster, cost-effective variant
-- **GPT-4 Turbo** - High-performance with large context
-- **GPT-3.5 Turbo** - Fast and efficient legacy model
+### Latest Models (Default Preset)
+- **OpenAI**: GPT-4o, GPT-4o Mini
+- **Anthropic**: Claude 3.5 Sonnet, Claude 3.5 Haiku
+- **Google**: Gemini 2.5 Pro, Gemini 2.5 Flash
 
-### 📡 Anthropic Models
-- **Claude 3.5 Sonnet** - Most intelligent Claude model
-- **Claude 3.5 Haiku** - Fast and efficient
-- **Claude 3 Opus** - Most capable legacy model
-- **Claude 3 Haiku** - Budget-friendly option
+### Legacy Models Preset
+- **OpenAI**: GPT-4 Turbo, GPT-3.5 Turbo
+- **Anthropic**: Claude 3 Opus, Claude 3 Haiku
+- **Google**: Gemini 1.0 Pro
 
-### 📡 Google Gemini Models
-- **Gemini 1.5 Pro** - Most capable with 1M token context
-- **Gemini 1.5 Flash** - Fast and efficient
-- **Gemini 1.0 Pro** - Legacy model
+## 🎯 Configuration Options
 
-## 🎯 Preset Configurations
-
+### Model Presets
 | Preset | Description | Models |
-|--------|-------------|---------|
-| `premium` | Top-tier models from each provider | GPT-4o, GPT-4o Mini, Claude 3.5 Sonnet, Claude 3.5 Haiku, Gemini 1.5 Pro, Gemini 1.5 Flash |
-| `budget` | Cost-effective models with good performance | GPT-4o Mini, GPT-3.5 Turbo, Claude 3.5 Haiku, Claude 3 Haiku, Gemini 1.5 Flash |
-| `recommended` | All recommended models across providers | All ⭐ starred models |
-| `openai` | OpenAI's best models | GPT-4o, GPT-4o Mini |
-| `anthropic` | Anthropic's best models | Claude 3.5 Sonnet, Claude 3.5 Haiku |
-| `gemini` | Google's best models | Gemini 1.5 Pro, Gemini 1.5 Flash |
+|--------|-------------|--------|
+| `latest` (default) | Latest models from each provider | GPT-4o, GPT-4o Mini, Claude 3.5 Sonnet, Claude 3.5 Haiku, Gemini 2.5 Pro, Gemini 2.5 Flash |
+| `legacy` | Legacy models from each provider | GPT-4 Turbo, GPT-3.5 Turbo, Claude 3 Opus, Claude 3 Haiku, Gemini 1.0 Pro |
 
-## 🧠 Human-like & Adaptive Chess Engines
+### Opponent Options
+| Option | Description |
+|--------|--------------|
+| `random` (default) | Plays random legal moves |
+| `lowest-elo` | Plays at 600 ELO strength using Stockfish |
 
-**NEW FEATURES**: 
-- Use human-like chess engines instead of traditional Stockfish for more realistic opponents!
-- Adaptive engine selection automatically switches between engines based on ELO rating!
-- Game duration tracking to measure complete game time including API responses!
-
-Traditional chess engines like Stockfish play perfectly mechanical chess, which may not reflect how human players actually perform. Human-like engines provide more realistic opponents that make human-like decisions and mistakes. Additionally, our new adaptive engine system automatically selects the most appropriate engine based on target ELO rating.
-
-### Available Engines
-
-| Engine | Description | Human-likeness | ELO Range | Installation |
-|--------|-------------|----------------|-----------|--------------|
-| **🧠 Maia** | Neural network trained on human games | ⭐⭐⭐⭐⭐ Most realistic | 1100-2400 | [Maia Chess](https://github.com/CSSLab/maia-chess) |
-| **♟️ LCZero** | Neural network with human-like settings | ⭐⭐⭐⭐ Very good | 1100-2400 | `brew install lc0` (macOS) |
-| **🤖 Human Stockfish** | Traditional Stockfish with human settings | ⭐⭐⭐ Good | 1300-2400 | Built-in with Stockfish |
-| **🧩 Texel** | Specialized for lower ratings | ⭐⭐ Mechanical | 600-1200 | `brew install texel` or [Download](http://www.open-chess.org/viewtopic.php?f=5&t=3070) |
-| **🎮 MadChess** | Good low-ELO simulation | ⭐⭐⭐ Good | 600-1200 | [Download](https://github.com/kevingreenheck/madchess) |
-| **♞ Toga** | Classic engine with weaker settings | ⭐⭐ Mechanical | 600-1300 | [Download](http://www.mediafire.com/file/3jwz4sbgqt2dwd2/TogaII40.zip) |
-
-### Quick Start with Human & Adaptive Engines
-
-```bash
-# Use human-like engines (auto-detected)
-python main.py --preset premium --use-human-engine
-
-# Specify engine type explicitly
-python main.py --preset budget --use-human-engine --human-engine-type maia
-
-# Use Leela Chess Zero for human-like play
-python main.py --preset openai --use-human-engine --human-engine-type lczero
-
-# Use adaptive engine selection (default behavior)
-python main.py --preset budget --adaptive-engines
-
-# Disable adaptive engine selection
-python main.py --preset openai --no-adaptive-engines
-
-# Compare human vs traditional engines
-python examples/human_engine_demo.py --mode comparison
-```
-
-### Installation Helper
-
-```bash
-# Install human engines automatically
-python install_human_engines.py --engine all
-
-# Install specific engine
-python install_human_engines.py --engine maia
-
-# Test your installation
-python test_human_engines.py --demo
-```
-
-### Why Use Human & Adaptive Engines?
-
-- **🎯 More Realistic Assessment**: Human engines make mistakes and play like real players
-- **📈 Better ELO Scaling**: Strength scales more naturally with human-like characteristics
-- **🎲 Move Variation**: Unlike mechanical engines, they show variation in move selection
-- **🧠 Human-like Thinking**: Trained on human games, not perfect engine analysis
-- **⚖️ Fair Evaluation**: Better reflects how LLMs would perform against human opponents
-- **📊 Accurate Low ELO**: Adaptive engine selection provides more accurate low-ELO opponents
-- **🔄 Seamless Transitions**: Automatically switches engines based on target ELO rating
-
-### Comparison: Human vs Traditional
-
-```bash
-# See the difference in action
-python examples/human_engine_demo.py --mode comparison
-
-# Results show human engines vary moves 50-75% more than traditional engines
-# providing much more realistic opposition for LLM evaluation
-```
+### Playing Modes
+| Mode | Description |
+|------|-------------|
+| Prompt-based (default) | Direct LLM prompting for move generation |
+| Agent-based (`--use-agent`) | Tool-based reasoning with chess analysis |
 
 ## 📋 Usage Examples
 
 ### Basic Usage
 
 ```bash
-# List all available models
+# Default run with latest models
+python main.py
+
+# Use legacy models
+python main.py --preset legacy
+
+# Custom model selection
+python main.py --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet:Claude-Sonnet"
+
+# List available models
 python main.py --list-models
 
-# List all presets
+# List available presets
 python main.py --list-presets
-
-# Run with specific preset
-python main.py --preset premium
-
-# Custom bot lineup
-python main.py --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet"
 ```
 
-### Advanced Configuration
+### Opponent Selection
 
 ```bash
-# Custom ELO range
-python main.py --preset budget --start-elo 800 --max-elo 1600 --elo-step 200
+# Play against random moves (default)
+python main.py --opponent random
 
-# Faster games with shorter thinking time
-python main.py --preset openai --think-time 0.1 --max-plies 100
-
-# High-temperature creative play
-python main.py --bots "openai:gpt-4o:Creative-GPT" --llm-temperature 0.8
-
-# Cost-controlled testing
-python main.py --preset budget --budget-limit 2.0 --show-costs
-
-# Use adaptive engines for better low-ELO simulation
-python main.py --preset budget --start-elo 600 --max-elo 1800 --adaptive-engines
+# Play against 600 ELO Stockfish engine
+python main.py --opponent lowest-elo
 ```
 
-### Demo Modes
+### Playing Modes
 
 ```bash
-# Robot battle visualization
-python main.py --robot-demo
+# Prompt-based reasoning (default)
+python main.py
 
-# Quick robot demo
-python main.py --quick-robot-demo
+# Agent-based reasoning with chess analysis tools
+python main.py --use-agent
 
-# Standard demo with random bots
-python main.py --demo
+# Compare both modes
+python examples/agent_demo.py
 ```
+
+### Budget and Cost Tracking
+
+```bash
+# Set spending limit and show costs
+python main.py --budget-limit 10.0 --show-costs
+
+# Track costs without limit
+python main.py --show-costs
+
+# Budget tracking example
+python examples/budget_and_ranking_demo.py
+```
+
+### Analysis and Leaderboards
+
+```bash
+# View top 10 models
+python main.py --leaderboard 10
+
+# Show all available models
+python main.py --leaderboard
+
+# Run comprehensive analysis
+python examples/comprehensive_test.py
+```
+
 
 ## 🎮 Live Dashboard
 
-The benchmark features a beautiful real-time terminal dashboard with comprehensive performance tracking:
+The benchmark features a beautiful real-time terminal dashboard that shows:
 
-### 📊 Enhanced Performance Metrics
-
-**NEW**: The dashboard now tracks detailed performance metrics including:
-
-- **⏱️ Move Timing**: Real-time average move generation time per model
-- **⌛ Game Duration**: Total time per game including API response times
-- **🚫 Illegal Moves**: Count of invalid move attempts (indicates rule understanding)
-- **📈 Live Updates**: Real-time progress tracking during gameplay with immediate state updates
-- **💰 Cost Analysis**: Time-based cost estimation for API usage
-- **🔄 Responsive Dashboard**: Live display updates every move with no lag or freezing
+- **🎨 Chess Board Visualization**: Live ASCII chess board with move highlighting
+- **📁 Performance Metrics**: Win rates, game statistics, and timing analysis
+- **💰 Cost Tracking**: Real-time budget usage and spending alerts
+- **🏆 Progress Updates**: Live status of each model's performance
+- **⏱️ Move Timing**: Response speed analysis for each model
 
 Example enhanced summary table:
 ```
@@ -365,56 +390,35 @@ Each bot is evaluated on:
 - **Cost Efficiency**: Performance per dollar spent
 - **Consistency Score**: Standard deviation of ELO performance
 
-## ⚙️ Configuration Options
+## ⚙️ Command Line Options
 
-### Command Line Arguments
+### Essential Arguments
 
 ```bash
-# Bot Configuration
+# Model Selection
+--preset {latest,legacy}             # Model preset (default: latest)
 --bots "provider:model:name,..."     # Custom bot specification
---preset PRESET                      # Use predefined bot lineup
 
-# Engine Configuration
---adaptive-engines                   # Use different engines based on ELO (default: enabled)
---no-adaptive-engines                # Use single engine for all ELO levels
---use-human-engine                   # Use human-like engines instead of Stockfish
---human-engine-type TYPE             # Specify: maia, lczero, or human_stockfish
+# Opponent Selection  
+--opponent {random,lowest-elo}       # Opponent type (default: random)
 
-# Budget & Cost Tracking
+# Playing Mode
+--use-agent                          # Use agent-based reasoning (default: prompt-based)
+
+# Budget Tracking
 --budget-limit AMOUNT                # Set spending limit in USD
---show-costs                         # Display real-time cost tracking
+--show-costs                         # Display cost tracking
 
-# Analysis & Ranking
+# Analysis
 --leaderboard [N]                    # Show top N models (default: 20)
---provider-stats                     # Compare provider performance
---analyze-model MODEL_ID             # Deep analysis of specific model
-
-# ELO Ladder Settings
---start-elo ELO                      # Starting ELO rating (default: 600)
---elo-step STEP                      # ELO increment per rung (default: 100)
---max-elo ELO                        # Maximum ELO to attempt (default: 2400)
 
 # Game Settings
---think-time SECONDS                 # Thinking time per move (default: 0.3)
---max-plies COUNT                    # Maximum moves per game (default: 300)
---escalate-on MODE                   # When to advance: "always" or "on_win"
-                                     # Game duration is automatically tracked
+--max-games N                        # Maximum games per model (default: 10)
 
-# LLM Settings
---llm-timeout SECONDS                # LLM response timeout (default: 20.0)
---llm-temperature TEMP               # Sampling temperature (default: 0.0)
-
-# Output Settings
---output-dir PATH                    # Results directory (default: "runs")
---save-pgn                          # Save games in PGN format
-
-# Engine Settings
---stockfish PATH                     # Custom Stockfish executable path
-
-# Display Options
---verbose                           # Verbose logging
---debug                             # Debug mode
---refresh-rate HZ                   # UI refresh rate (default: 6)
+# Information
+--list-models                        # List available models
+--list-presets                       # List available presets
+--help                               # Show help message
 ```
 
 ### Bot Specification Format
@@ -429,111 +433,46 @@ gemini:gemini-1.5-pro:Gemini-1.5-Pro
 random::Baseline
 ```
 
-## 🔬 Advanced Features
+## 🔬 How It Works
 
-### Custom Prompting
+### Playing Modes
 
-The tool uses optimized prompts for chess move generation:
+**Prompt-based (Default)**:
+- Sends the chess position and legal moves directly to the LLM
+- Asks for a move in UCI notation (e.g., "e2e4")
+- Simple and fast, good for basic chess performance testing
 
-```python
-def _create_chess_prompt(self, board: chess.Board) -> str:
-    """Create a standardized chess prompt for the LLM."""
-    legal_moves = " ".join(move.uci() for move in board.legal_moves)
-    color = "White" if board.turn == chess.WHITE else "Black"
+**Agent-based (`--use-agent`)**:
+- Uses structured reasoning with chess analysis tools
+- Evaluates position, considers multiple candidate moves
+- Makes decisions based on chess principles and analysis
+- Slower but more sophisticated chess understanding
 
-    prompt = (
-        "You are a strong chess player. Given the position and legal moves, "
-        "choose the best move and respond with ONLY the UCI notation.\n\n"
-        f"Position (FEN): {board.fen()}\n"
-        f"Side to move: {color}\n"
-        f"Legal moves: {legal_moves}\n\n"
-        "Your response must be exactly one legal UCI move."
-    )
-    return prompt
-```
+### Opponent Types
 
-### Error Handling and Fallbacks
+- **Random**: Plays completely random legal moves (good for basic testing)
+- **600 ELO Engine**: Uses Stockfish at beginner strength (more realistic opponent)
 
-- **Timeout Protection**: LLM requests timeout after 20 seconds
-- **Move Validation**: All moves validated against legal move list
-- **Fallback System**: Random legal moves when LLM fails
-- **Robust Parsing**: Handles various move notation formats
+### Results Storage
 
-### Concurrent Execution
+- All games saved in PGN format for analysis
+- Performance metrics stored in SQLite database
+- Historical leaderboards track model improvements over time
+- Cost tracking helps optimize API usage
 
-Multiple bots run simultaneously with proper async handling:
-
-```python
-# Run all bots concurrently on the ELO ladder
-tasks = []
-for bot_spec in bot_specs:
-    task = asyncio.create_task(
-        self._run_bot_ladder(bot_spec, engine, output_dir)
-    )
-    tasks.append(task)
-
-results = await asyncio.gather(*tasks, return_exceptions=True)
-```
-
-## 📈 Benchmarking Best Practices
-
-### Model Selection
-- Start with **recommended models** for reliable results
-- Use **budget preset** for cost-effective testing
-- Try **premium preset** for cutting-edge performance
-
-### ELO Configuration
-- Begin with **600-1000 ELO** range for initial assessment
-- Use **100 ELO steps** for balanced progression
-- Extend to **2400 ELO** for comprehensive evaluation
-- Use **adaptive engines** for realistic play across all ELO ranges
-- For low ELO (under 1100), specialized engines like **Texel** or **MadChess** provide more realistic opposition
-
-### Statistical Significance
-- Run multiple iterations for reliable statistics
-- Consider different random seeds
-- Analyze both win rates and maximum ELO reached
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-chess-llm-benchmark/
-├── chess_llm_bench/          # Main package
-│   ├── core/                 # Core game logic
-│   ├── llm/                  # LLM providers and models
-│   ├── ui/                   # Terminal UI components
-│   └── cli.py                # Command-line interface
-├── tests/                    # Test suite
-├── runs/                     # Benchmark results
-├── main.py                   # Entry point
-└── requirements.txt          # Dependencies
-```
-
-### Adding New Providers
-
-1. Create a new provider class in `chess_llm_bench/llm/client.py`
-2. Inherit from `BaseLLMProvider`
-3. Implement `generate_move()` method
-4. Register in `LLMClient.PROVIDERS`
-5. Add model definitions to `chess_llm_bench/llm/models.py`
+## 🔧 Development
 
 ### Running Tests
 
 ```bash
-# Run built-in tests
-python main.py --test
-
 # Run with pytest
 pytest tests/ -v
 
-# Type checking
+# Type checking (if mypy installed)
 mypy chess_llm_bench/
 
-# Code formatting
+# Code formatting (if black installed)
 black chess_llm_bench/
-isort chess_llm_bench/
 ```
 
 ## 🤝 Contributing
@@ -555,60 +494,78 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **python-chess** - For excellent chess programming library
 - **Rich** - For beautiful terminal formatting
 
-## 💰 Budget Tracking & Cost Management
+## 💰 Budget Tracking
 
-### Real-Time Cost Monitoring
+### Cost Management
 ```bash
 # Set $10 budget limit with cost display
-python main.py --preset premium --budget-limit 10.0 --show-costs
+python main.py --budget-limit 10.0 --show-costs
 
-# Track costs for specific models
-python main.py --bots "openai:gpt-4o-mini:Test" --budget-limit 1.0
+# Track costs without limit
+python main.py --show-costs
 ```
 
-### Cost Management Features
-- **Real-time tracking**: See costs as they accumulate
-- **Budget limits**: Set spending caps with automatic warnings
-- **Cost breakdown**: Detailed analysis by provider, model, and bot
-- **Efficiency metrics**: Cost per game, cost per ELO point
-- **Historical tracking**: Track spending trends over time
+### Features
+- **Real-time tracking**: See costs accumulate during benchmarking
+- **Budget limits**: Set spending caps with automatic warnings at 50%, 75%, 90%, and 100%
+- **Cost breakdown**: Analysis by provider, model, and individual bot
+- **Historical tracking**: Cost trends stored in database
 
-### Pricing Information
-Current approximate costs (per 1K tokens):
-- **GPT-4o Mini**: $0.00015 input, $0.0006 output (~$0.004/game)
-- **Claude 3.5 Haiku**: $0.0008 input, $0.004 output (~$0.019/game)
-- **Gemini 1.5 Flash**: $0.000075 input, $0.0003 output (~$0.002/game)
+### Approximate Costs (per 1K tokens)
 - **GPT-4o**: $0.0025 input, $0.01 output (~$0.065/game)
+- **GPT-4o Mini**: $0.00015 input, $0.0006 output (~$0.004/game)  
+- **Claude 3.5 Sonnet**: $0.003 input, $0.015 output (~$0.048/game)
+- **Claude 3.5 Haiku**: $0.0008 input, $0.004 output (~$0.019/game)
+- **Gemini 2.5 Pro**: $0.00125 input, $0.005 output (~$0.027/game)
+- **Gemini 2.5 Flash**: $0.000075 input, $0.0003 output (~$0.002/game)
 
-## 🏆 Ranking & Analysis System
+## 🏆 Performance Tracking
 
-### Leaderboard Commands
+### Leaderboard
 ```bash
 # Show top 10 performing models
 python main.py --leaderboard 10
 
-# Compare all providers
-python main.py --provider-stats
-
-# Deep-dive analysis of specific model
-python main.py --analyze-model openai:gpt-4o
+# Show top 20 (default)
+python main.py --leaderboard
 ```
 
-### Performance Tracking
-- **Historical leaderboards**: Track best performers over time
-- **Efficiency rankings**: Best performance per dollar spent
-- **Trend analysis**: Identify improving vs declining models
-- **Statistical insights**: Mean, median, consistency scores
-- **Provider comparisons**: Cross-provider performance analysis
+### Metrics Tracked
+- **Max ELO reached**: Highest performance achieved
+- **Win/Draw/Loss rates**: Success against opponents  
+- **Cost efficiency**: Performance per dollar spent
+- **Response timing**: Speed of move generation
+- **Historical trends**: Performance evolution over time
 
 ### Database Storage
-All results are automatically stored in SQLite database for:
-- Historical analysis and trends
-- Performance comparisons across runs
+All results automatically stored in SQLite database (`data/results.db`) for:
+- Historical performance comparison
+- Cost analysis and trend tracking
+- Model improvement identification
+- Performance comparisons across runs  
 - Cost tracking and efficiency analysis
 - Statistical significance testing
 
-## 📞 Support
+## 🚀 Getting Started Summary
+
+1. **Install**: `pip install -r requirements.txt` + Stockfish
+2. **Set API Keys**: Create `.env` with your OpenAI/Anthropic/Gemini keys  
+3. **Run**: `python main.py` (uses latest models vs random opponent)
+4. **Customize**: Try `--preset legacy`, `--use-agent`, or `--opponent lowest-elo`
+5. **Track Costs**: Add `--budget-limit 5.0 --show-costs`
+6. **View Results**: `python main.py --leaderboard 10`
+
+That's it! The tool handles everything else automatically.
+
+## 🤝 Contributing
+
+Contributions welcome! Please fork the repository, create a feature branch, make your changes, and open a Pull Request.
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 📢 Support
 
 - 🐛 **Issues**: [GitHub Issues](https://github.com/Youssef2430/chessLLM/issues)
 - 📧 **Email**: youssefchouay30@gmail.com
