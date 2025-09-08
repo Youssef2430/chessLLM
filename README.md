@@ -131,56 +131,56 @@ chess-llm-benchmark/
 flowchart TD
     A[main.py] --> B[CLI Parser]
     B --> C{Command Type}
-    
+
     C -->|Benchmark| D[BenchmarkOrchestrator]
     C -->|Leaderboard| E[RankingSystem]
     C -->|List Models| F[ModelInfo]
-    
+
     D --> G[Config]
     D --> H[LLM Client]
     D --> I[Chess Engine]
     D --> J[Dashboard]
-    
+
     G --> K[Model Presets]
     K --> L[Latest Models]
     K --> M[Legacy Models]
-    
+
     H --> N{Playing Mode}
     N -->|Prompt| O[Direct LLM Call]
     N -->|Agent| P[Agent with Tools]
-    
+
     P --> Q[Chess Analysis Tools]
     Q --> R[Position Evaluation]
     Q --> S[Move Analysis]
     Q --> T[Strategic Planning]
-    
+
     I --> U{Opponent Type}
     U -->|Random| V[Random Move Generator]
     U -->|600 ELO| W[Stockfish at 600]
-    
+
     D --> X[Game Runner]
     X --> Y[Move Generation Loop]
     Y --> H
     Y --> I
     Y --> Z[Move Validation]
-    
+
     Z --> AA[Game Recording]
     AA --> BB[PGN Files]
     AA --> CC[Statistics Update]
-    
+
     CC --> DD[Budget Tracker]
     DD --> EE[Cost Calculation]
     DD --> FF[Budget Warnings]
-    
+
     CC --> GG[Results Database]
     GG --> HH[SQLite Storage]
     HH --> E
-    
+
     J --> II[Live Display]
     II --> JJ[Chess Board Rendering]
     II --> KK[Statistics Display]
     II --> LL[Cost Display]
-    
+
     style A fill:#e1f5fe
     style D fill:#f3e5f5
     style H fill:#fff3e0
@@ -399,7 +399,7 @@ Each bot is evaluated on:
 --preset {latest,legacy}             # Model preset (default: latest)
 --bots "provider:model:name,..."     # Custom bot specification
 
-# Opponent Selection  
+# Opponent Selection
 --opponent {random,lowest-elo}       # Opponent type (default: random)
 
 # Playing Mode
@@ -453,13 +453,6 @@ random::Baseline
 - **Random**: Plays completely random legal moves (good for basic testing)
 - **600 ELO Engine**: Uses Stockfish at beginner strength (more realistic opponent)
 
-### Results Storage
-
-- All games saved in PGN format for analysis
-- Performance metrics stored in SQLite database
-- Historical leaderboards track model improvements over time
-- Cost tracking helps optimize API usage
-
 ## 🔧 Development
 
 ### Running Tests
@@ -474,25 +467,6 @@ mypy chess_llm_bench/
 # Code formatting (if black installed)
 black chess_llm_bench/
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Stockfish Team** - For the amazing chess engine
-- **OpenAI, Anthropic, Google** - For providing powerful language models
-- **python-chess** - For excellent chess programming library
-- **Rich** - For beautiful terminal formatting
 
 ## 💰 Budget Tracking
 
@@ -513,7 +487,7 @@ python main.py --show-costs
 
 ### Approximate Costs (per 1K tokens)
 - **GPT-4o**: $0.0025 input, $0.01 output (~$0.065/game)
-- **GPT-4o Mini**: $0.00015 input, $0.0006 output (~$0.004/game)  
+- **GPT-4o Mini**: $0.00015 input, $0.0006 output (~$0.004/game)
 - **Claude 3.5 Sonnet**: $0.003 input, $0.015 output (~$0.048/game)
 - **Claude 3.5 Haiku**: $0.0008 input, $0.004 output (~$0.019/game)
 - **Gemini 2.5 Pro**: $0.00125 input, $0.005 output (~$0.027/game)
@@ -530,32 +504,14 @@ python main.py --leaderboard 10
 python main.py --leaderboard
 ```
 
-### Metrics Tracked
-- **Max ELO reached**: Highest performance achieved
-- **Win/Draw/Loss rates**: Success against opponents  
-- **Cost efficiency**: Performance per dollar spent
-- **Response timing**: Speed of move generation
-- **Historical trends**: Performance evolution over time
-
 ### Database Storage
 All results automatically stored in SQLite database (`data/results.db`) for:
 - Historical performance comparison
 - Cost analysis and trend tracking
 - Model improvement identification
-- Performance comparisons across runs  
+- Performance comparisons across runs
 - Cost tracking and efficiency analysis
 - Statistical significance testing
-
-## 🚀 Getting Started Summary
-
-1. **Install**: `pip install -r requirements.txt` + Stockfish
-2. **Set API Keys**: Create `.env` with your OpenAI/Anthropic/Gemini keys  
-3. **Run**: `python main.py` (uses latest models vs random opponent)
-4. **Customize**: Try `--preset legacy`, `--use-agent`, or `--opponent lowest-elo`
-5. **Track Costs**: Add `--budget-limit 5.0 --show-costs`
-6. **View Results**: `python main.py --leaderboard 10`
-
-That's it! The tool handles everything else automatically.
 
 ## 🤝 Contributing
 
@@ -572,4 +528,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Made with ♟️ and 🤖 by the Youssef**
+**Made with ♟️ and 🤖 by Youssef**
