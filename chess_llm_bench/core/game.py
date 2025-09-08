@@ -585,20 +585,24 @@ class LadderRunner:
 
                 # Handle random opponent specially
                 if fixed_elo == 0:
-                    # For random opponent, we'll need to modify the game runner
-                    # For now, use a very low ELO to get weak play
-                    game_elo = 600  # Use minimum ELO as baseline
+                    # Use random opponent logic, not engine at ELO 600
+                    game_record = await self.game_runner.play_game(
+                        random_opponent=True,
+                        output_dir=output_dir,
+                        state=state,
+                        llm_plays_white=llm_plays_white,
+                        opening_moves=opening_moves
+                    )
                 else:
                     game_elo = fixed_elo
-
-                # Play the game
-                game_record = await self.game_runner.play_game(
-                    elo=game_elo,
-                    output_dir=output_dir,
-                    state=state,
-                    llm_plays_white=llm_plays_white,
-                    opening_moves=opening_moves
-                )
+                    # Play the game with engine at specified ELO
+                    game_record = await self.game_runner.play_game(
+                        elo=game_elo,
+                        output_dir=output_dir,
+                        state=state,
+                        llm_plays_white=llm_plays_white,
+                        opening_moves=opening_moves
+                    )
                 
                 # Override the ELO in the record to reflect the actual fixed ELO
                 game_record.elo = fixed_elo
