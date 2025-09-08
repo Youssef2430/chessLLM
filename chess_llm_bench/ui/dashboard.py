@@ -155,9 +155,18 @@ class Dashboard:
         else:
             full_content = Group(main_content, summary_panel)
 
+        # Determine appropriate title based on mode
+        if self.config and hasattr(self.config, 'fixed_opponent_elo') and self.config.fixed_opponent_elo is not None:
+            if self.config.fixed_opponent_elo == 0:
+                title = "🏆 Chess LLM vs Random Opponent"
+            else:
+                title = f"🏆 Chess LLM vs ELO {self.config.fixed_opponent_elo}"
+        else:
+            title = "🏆 Chess LLM ELO Ladder Benchmark"
+        
         return Panel(
             full_content,
-            title="🏆 Chess LLM ELO Ladder Benchmark",
+            title=title,
             title_align="center",
             border_style="magenta",
             padding=(1, 2)
@@ -170,9 +179,17 @@ class Dashboard:
         stats: Optional[LadderStats]
     ) -> Panel:
         """Render an individual bot's status panel."""
-        # Header with bot name and ladder
+        # Header with bot name and ladder/fixed mode
         header = Text(f"{bot_name}", style="bold cyan")
-        ladder_display = f"Ladder: {state.ladder_display}"
+        
+        # Check if we're in fixed ELO mode
+        if self.config and hasattr(self.config, 'fixed_opponent_elo') and self.config.fixed_opponent_elo is not None:
+            if self.config.fixed_opponent_elo == 0:
+                ladder_display = "Fixed Opponent: Random"
+            else:
+                ladder_display = f"Fixed Opponent: ELO {self.config.fixed_opponent_elo}"
+        else:
+            ladder_display = f"Ladder: {state.ladder_display}"
 
         # Create main table
         table = Table.grid(expand=True)
@@ -245,6 +262,28 @@ class Dashboard:
             if stats.total_illegal_moves > 0:
                 status_lines.append(f"Illegal moves: {stats.total_illegal_moves}")
 
+        # Cost information if available
+        show_costs = self.config.show_costs if hasattr(self.config, 'show_costs') else False
+        budget_tracker = get_budget_tracker()
+        has_costs = budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0
+
+        if show_costs or has_costs:
+            try:
+                if budget_tracker and budget_tracker.summary.costs_by_bot:
+                    bot_cost = budget_tracker.summary.costs_by_bot.get(bot_name, 0.0)
+                    if bot_cost > 0 or show_costs:
+                        status_lines.append("")  # Separator
+                        status_lines.append(f"💰 Cost: ${bot_cost:.4f}")
+
+                        # Show percentage of total cost if multiple bots
+                        total_cost = budget_tracker.get_current_cost()
+                        if total_cost > 0 and bot_cost > 0:
+                            pct = (bot_cost / total_cost) * 100
+                            status_lines.append(f"📊 Share: {pct:.1f}% of total")
+            except Exception:
+                # Ignore cost display errors to not break the dashboard
+                pass
+
         # Live timing stats during current game
         if hasattr(state, 'average_move_time') and state.average_move_time > 0:
             status_lines.append("")
@@ -309,6 +348,14 @@ class Dashboard:
         table.add_column("Avg Time", style="magenta", justify="right")
         table.add_column("Illegal Moves", style="red", justify="right")
 
+        # Add cost column if costs are being tracked
+        show_costs = self.config.show_costs if hasattr(self.config, 'show_costs') else False
+        budget_tracker = get_budget_tracker()
+        has_costs = budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0
+
+        if show_costs or has_costs:
+            table.add_column("Cost", style="green", justify="right")
+
         for bot_name in sorted(states.keys()):
             state = states[bot_name]
             bot_stats = stats.get(bot_name)
@@ -337,7 +384,18 @@ class Dashboard:
             avg_time = f"{bot_stats.average_move_time:.2f}s" if bot_stats and bot_stats.average_move_time > 0 else "—"
             illegal_moves = str(bot_stats.total_illegal_moves) if bot_stats else "0"
 
-            table.add_row(
+            # Get cost for this bot if available
+            bot_cost = "—"
+            if show_costs or has_costs:
+                try:
+                    if budget_tracker and budget_tracker.summary.costs_by_bot:
+                        cost_value = budget_tracker.summary.costs_by_bot.get(bot_name, 0.0)
+                        bot_cost = f"${cost_value:.3f}" if cost_value > 0 else "$0.000"
+                except Exception:
+                    bot_cost = "—"
+
+            # Add row with or without cost column
+            row_data = [
                 bot_name,
                 Text(status, style=status_style),
                 max_elo,
@@ -346,33 +404,69 @@ class Dashboard:
                 record,
                 avg_time,
                 illegal_moves
-            )
+            ]
 
-        # Add budget information if available
-        budget_text = None
-        try:
-            budget_tracker = get_budget_tracker()
-            if budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0:
-                budget_info = budget_tracker.get_budget_info()
-                if budget_info:
-                    budget_text = Text()
-                    budget_text.append("💰 Cost: ", style="dim")
-                    budget_text.append(budget_info["total_cost"], style=budget_info.get("style", "green"))
+            if show_costs or has_costs:
+                row_data.append(bot_cost)
 
-                    if "budget_limit" in budget_info and budget_info["budget_limit"] != "Unlimited":
-                        budget_text.append(" / ", style="dim")
-                        budget_text.append(budget_info["budget_limit"], style="dim")
-                        budget_text.append(f" ({budget_info.get('usage_percentage', '0%')})", style="dim")
+            table.add_row(*row_data)
 
-                    if "api_calls" in budget_info:
-                        budget_text.append(f"  |  📞 {budget_info['api_calls']} calls", style="dim")
-        except Exception:
-            # Ignore budget display errors to not break the dashboard
-            pass
+        # Add enhanced budget information if available
+        budget_panel = None
+        if show_costs or has_costs:
+            try:
+                if budget_tracker and budget_tracker.is_active:
+                    current_cost = budget_tracker.get_current_cost()
+                    total_requests = budget_tracker.summary.total_requests
+
+                    budget_lines = []
+
+                    # Current cost
+                    cost_style = "green"
+                    if budget_tracker.budget_limit:
+                        usage_pct = (current_cost / budget_tracker.budget_limit) * 100
+                        if usage_pct > 80:
+                            cost_style = "red"
+                        elif usage_pct > 60:
+                            cost_style = "yellow"
+
+                    cost_line = Text()
+                    cost_line.append("💰 Total Cost: ", style="dim")
+                    cost_line.append(f"${current_cost:.4f}", style=cost_style)
+
+                    if budget_tracker.budget_limit:
+                        cost_line.append(f" / ${budget_tracker.budget_limit:.2f}", style="dim")
+                        usage_pct = (current_cost / budget_tracker.budget_limit) * 100
+                        cost_line.append(f" ({usage_pct:.1f}%)", style=cost_style)
+
+                    budget_lines.append(cost_line)
+
+                    # API calls
+                    if total_requests > 0:
+                        calls_line = Text()
+                        calls_line.append("📞 API Calls: ", style="dim")
+                        calls_line.append(str(total_requests), style="blue")
+
+                        if current_cost > 0:
+                            avg_cost = current_cost / total_requests
+                            calls_line.append(f"  |  Avg: ${avg_cost:.4f}/call", style="dim")
+
+                        budget_lines.append(calls_line)
+
+                    if budget_lines:
+                        budget_panel = Panel(
+                            Group(*budget_lines),
+                            title="💰 Budget Tracking",
+                            border_style="green" if cost_style == "green" else cost_style,
+                            padding=(0, 1)
+                        )
+            except Exception:
+                # Ignore budget display errors to not break the dashboard
+                pass
 
         # Combine table and budget info
-        if budget_text:
-            final_content = Group(table, budget_text)
+        if budget_panel:
+            final_content = Group(table, budget_panel)
         else:
             final_content = table
 
@@ -409,6 +503,37 @@ class Dashboard:
                 summary_lines.append(f"📊 Performance: {bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L")
                 if hasattr(bot_stats, 'average_game_duration'):
                     summary_lines.append(f"⏱️ Avg game: {bot_stats.average_game_duration:.2f}s")
+
+        # Add cost information if available
+        show_costs = self.config.show_costs if hasattr(self.config, 'show_costs') else False
+        budget_tracker = get_budget_tracker()
+        has_costs = budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0
+
+        if show_costs or has_costs:
+            try:
+                current_cost = budget_tracker.get_current_cost()
+                if current_cost > 0 or show_costs:
+                    # Cost display with color coding
+                    cost_style = "green"
+                    if budget_tracker.budget_limit:
+                        usage_pct = (current_cost / budget_tracker.budget_limit) * 100
+                        if usage_pct > 80:
+                            cost_style = "red"
+                        elif usage_pct > 60:
+                            cost_style = "yellow"
+
+                    summary_lines.append(f"💰 Cost: ${current_cost:.4f}")
+
+                    if budget_tracker.budget_limit:
+                        usage_pct = (current_cost / budget_tracker.budget_limit) * 100
+                        summary_lines.append(f"📊 Budget: {usage_pct:.1f}% of ${budget_tracker.budget_limit:.2f}")
+
+                    if budget_tracker.summary.total_requests > 0:
+                        avg_cost = current_cost / budget_tracker.summary.total_requests if current_cost > 0 else 0
+                        summary_lines.append(f"📞 API calls: {budget_tracker.summary.total_requests} (${avg_cost:.4f}/call)")
+            except Exception:
+                # Ignore budget display errors to not break the dashboard
+                pass
 
         timestamp = datetime.now().strftime("%H:%M:%S")
         summary_lines.append(f"⏰ {timestamp}")
@@ -509,10 +634,15 @@ class Dashboard:
         # Add budget information if available
         budget_tracker = get_budget_tracker()
         if budget_tracker.is_active and budget_tracker.get_current_cost() > 0:
-            summary_lines.append(f"💰 Total cost: ${budget_tracker.get_current_cost():.4f}")
+            current_cost = budget_tracker.get_current_cost()
+            summary_lines.append(f"💰 Total cost: ${current_cost:.4f}")
+
             if budget_tracker.budget_limit:
-                percentage = (budget_tracker.get_current_cost() / budget_tracker.budget_limit) * 100
+                percentage = (current_cost / budget_tracker.budget_limit) * 100
                 summary_lines.append(f"📊 Budget usage: {percentage:.1f}%")
+
+            if budget_tracker.summary.total_requests > 0:
+                summary_lines.append(f"📞 API calls: {budget_tracker.summary.total_requests}")
 
         summary_lines.append(f"💾 Results saved to: {result.output_dir}")
 

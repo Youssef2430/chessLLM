@@ -21,6 +21,17 @@ import chess
 from ..core.models import BotSpec
 from ..core.budget import record_llm_usage
 
+# Try to import agent providers
+try:
+    from .agents import (
+        LLMAgentProvider,
+        create_agent_provider,
+        ThinkingStrategy
+    )
+    AGENTS_AVAILABLE = True
+except ImportError:
+    AGENTS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # Regex for extracting UCI moves from LLM responses
@@ -109,12 +120,12 @@ class BaseLLMProvider(ABC):
 
         return prompt
 
-    def _fallback_random_move(self, board: chess.Board) -> chess.Move:
+    def _fallback_random_move(self, board: chess.Board) -> str:
         """Generate a random legal move as fallback."""
         legal_moves = list(board.legal_moves)
         if not legal_moves:
             raise LLMProviderError("No legal moves available")
-        return legal_moves[self.random.randrange(len(legal_moves))]
+        return legal_moves[self.random.randrange(len(legal_moves))].uci()
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -452,8 +463,7 @@ class RandomProvider(BaseLLMProvider):
         move_history: list = []
     ) -> str:
         """Generate a random valid move."""
-        move = self._fallback_random_move(board)
-        return move.uci()
+        return self._fallback_random_move(board)
 
 
 class LLMClient:
@@ -472,28 +482,52 @@ class LLMClient:
         "random": RandomProvider,
     }
 
-    def __init__(self, spec: BotSpec):
+    def __init__(self, spec: BotSpec, use_agent: bool = False,
+                 agent_strategy: str = "balanced", verbose_agent: bool = False):
         """
         Initialize LLM client with the specified bot configuration.
 
         Args:
             spec: Bot specification including provider, model, and name
+            use_agent: Whether to use agent-based reasoning instead of prompting
+            agent_strategy: Strategy for agent reasoning ("fast", "balanced", "deep", "adaptive")
+            verbose_agent: Whether to output detailed agent reasoning
         """
         self.spec = spec
+        self.use_agent = use_agent
+        self.agent_strategy = agent_strategy
+        self.verbose_agent = verbose_agent
 
-        # Validate and create provider
-        provider_class = self.PROVIDERS.get(spec.provider.lower())
-        if not provider_class:
-            available = ", ".join(self.PROVIDERS.keys())
-            raise LLMProviderError(
-                f"Unsupported provider '{spec.provider}'. Available: {available}"
-            )
+        # Create provider (agent-based or traditional)
+        if use_agent and AGENTS_AVAILABLE and spec.provider.lower() != "random":
+            # Use agent-based provider for LLMs
+            try:
+                self.provider = self._create_agent_provider(
+                    spec,
+                    temperature=0.0
+                )
+                logger.info(f"Initialized agent-based LLM client: {spec} (strategy: {agent_strategy})")
+            except Exception as e:
+                logger.warning(f"Failed to create agent provider, falling back to traditional: {e}")
+                self.use_agent = False
+        else:
+            # Agents not available or not requested, use traditional provider
+            self.use_agent = False
 
-        try:
-            self.provider = provider_class(spec)
-            logger.info(f"Initialized LLM client: {spec}")
-        except Exception as e:
-            raise LLMProviderError(f"Failed to initialize provider {spec.provider}: {e}")
+        if not self.use_agent:
+            # Use traditional prompting-based provider
+            provider_class = self.PROVIDERS.get(spec.provider.lower())
+            if not provider_class:
+                available = ", ".join(self.PROVIDERS.keys())
+                raise LLMProviderError(
+                    f"Unsupported provider '{spec.provider}'. Available: {available}"
+                )
+
+            try:
+                self.provider = provider_class(spec)
+                logger.info(f"Initialized traditional LLM client: {spec}")
+            except Exception as e:
+                raise LLMProviderError(f"Failed to initialize provider {spec.provider}: {e}")
 
         # Initialize move statistics tracking
         self._total_move_time = 0.0
@@ -686,6 +720,19 @@ class LLMClient:
 
         return None
 
+    def _create_agent_provider(self, spec: BotSpec, temperature: float) -> BaseLLMProvider:
+        """Create an agent-based provider instance."""
+        if not AGENTS_AVAILABLE:
+            raise ImportError("Agent providers not available")
+
+        return create_agent_provider(
+            spec=spec,
+            strategy=self.agent_strategy,
+            verbose=self.verbose_agent,
+            use_tools=True,
+            temperature=temperature
+        )
+
     @classmethod
     def get_available_providers(cls) -> List[str]:
         """Get list of available LLM providers."""
@@ -709,9 +756,11 @@ def parse_bot_spec(spec_string: str) -> List[BotSpec]:
     Parse bot specification strings into BotSpec objects.
 
     Format: "provider:model:name" or "provider::name" (empty model)
+    Can prefix with "agent:" to use agent-based reasoning (e.g., "agent:openai:gpt-4:MyBot")
     Multiple bots can be specified separated by commas.
 
     Args:
+        spec_string: Bot specification string(s)
         spec_string: Comma-separated bot specifications
 
     Returns:

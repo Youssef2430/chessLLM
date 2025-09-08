@@ -233,14 +233,14 @@ def create_bot_specs(models: List[ModelInfo]) -> List[BotSpec]:
     ]
 
 
-def get_premium_bot_lineup() -> List[BotSpec]:
+def get_latest_bot_lineup() -> List[BotSpec]:
     """
-    Get a premium lineup of the best models from each provider.
+    Get the latest models from each provider.
 
     Returns:
-        List of BotSpec objects for top models
+        List of BotSpec objects for latest models
     """
-    premium_models = [
+    latest_models = [
         get_model_info("openai", "gpt-4o"),
         get_model_info("openai", "gpt-4o-mini"),
         get_model_info("anthropic", "claude-3-5-sonnet"),
@@ -248,24 +248,24 @@ def get_premium_bot_lineup() -> List[BotSpec]:
         get_model_info("gemini", "gemini-2.5-pro"),
         get_model_info("gemini", "gemini-2.5-flash"),
     ]
-    return create_bot_specs(premium_models)
+    return create_bot_specs(latest_models)
 
 
-def get_budget_bot_lineup() -> List[BotSpec]:
+def get_legacy_bot_lineup() -> List[BotSpec]:
     """
-    Get a budget-friendly lineup focusing on speed and cost.
+    Get legacy models from each provider.
 
     Returns:
-        List of BotSpec objects for budget models
+        List of BotSpec objects for legacy models
     """
-    budget_models = [
-        get_model_info("openai", "gpt-4o-mini"),
+    legacy_models = [
+        get_model_info("openai", "gpt-4-turbo"),
         get_model_info("openai", "gpt-3.5-turbo"),
-        get_model_info("anthropic", "claude-3-5-haiku"),
+        get_model_info("anthropic", "claude-3-opus"),
         get_model_info("anthropic", "claude-3-haiku"),
-        get_model_info("gemini", "gemini-2.5-flash"),
+        get_model_info("gemini", "gemini-1.0-pro"),
     ]
-    return create_bot_specs(budget_models)
+    return create_bot_specs(legacy_models)
 
 
 def get_all_recommended_bots() -> List[BotSpec]:
@@ -280,29 +280,13 @@ def get_all_recommended_bots() -> List[BotSpec]:
 
 # Preset configurations for common use cases
 PRESET_CONFIGS = {
-    "premium": {
-        "bots": get_premium_bot_lineup(),
-        "description": "Top-tier models from each provider"
+    "latest": {
+        "bots": get_latest_bot_lineup(),
+        "description": "Latest models from each provider"
     },
-    "budget": {
-        "bots": get_budget_bot_lineup(),
-        "description": "Cost-effective models with good performance"
-    },
-    "recommended": {
-        "bots": get_all_recommended_bots(),
-        "description": "All recommended models across providers"
-    },
-    "openai": {
-        "bots": create_bot_specs(get_recommended_models("openai")),
-        "description": "OpenAI's best models"
-    },
-    "anthropic": {
-        "bots": create_bot_specs(get_recommended_models("anthropic")),
-        "description": "Anthropic's best models"
-    },
-    "gemini": {
-        "bots": create_bot_specs(get_recommended_models("gemini")),
-        "description": "Google's best Gemini models"
+    "legacy": {
+        "bots": get_legacy_bot_lineup(),
+        "description": "Legacy models from each provider"
     },
 }
 

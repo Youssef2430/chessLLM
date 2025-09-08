@@ -12,12 +12,10 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, Union
 import logging
 import json
 import time
-from pathlib import Path
-import sys
 
 import chess
 import chess.engine as chess_engine

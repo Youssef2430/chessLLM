@@ -11,22 +11,21 @@ import argparse
 import asyncio
 import logging
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 import chess
 from rich.console import Console
 
 from .core.models import Config, BotSpec, LiveState, LadderStats, BenchmarkResult
-from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint, create_engine, autodetect_engine
-from .core.human_engine import HumanLikeEngine, autodetect_human_engines, get_best_human_engine, get_human_engine_installation_hint, create_human_engine
+from .core.engine import ChessEngine, autodetect_stockfish, get_friendly_stockfish_hint, create_engine
+from .core.human_engine import HumanLikeEngine, get_best_human_engine, get_human_engine_installation_hint
 from .core.adaptive_engine import AdaptiveEngine
 from .core.game import GameRunner, LadderRunner
 from .llm.client import LLMClient, parse_bot_spec
-from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_premium_bot_lineup
-from .core.budget import start_budget_tracking, stop_budget_tracking, get_budget_tracker
+from .llm.models import PRESET_CONFIGS, format_bot_spec_string, print_available_models, get_latest_bot_lineup
+from .core.budget import start_budget_tracking, stop_budget_tracking
 from .core.results import store_benchmark_results, show_leaderboard, show_provider_comparison, analyze_model
 from .ui.dashboard import Dashboard
 from .ui.board import render_robot_battle
@@ -228,9 +227,24 @@ class BenchmarkOrchestrator:
         for bot in self.bots:
             # Initialize LLM client
             try:
-                client = LLMClient(bot)
+                # Check if agent mode is enabled
+                use_agent = getattr(self.config, 'use_agent', False)
+                agent_strategy = getattr(self.config, 'agent_strategy', 'balanced')
+                verbose_agent = getattr(self.config, 'verbose_agent', False)
+
+                client = LLMClient(
+                    bot,
+                    use_agent=use_agent,
+                    agent_strategy=agent_strategy,
+                    verbose_agent=verbose_agent
+                )
+
+                if use_agent:
+                    logger.info(f"Initialized agent-based LLM client: {bot} (strategy: {agent_strategy})")
+                else:
+                    logger.info(f"Initialized LLM client: {bot}")
+
                 self.clients[bot.name] = client
-                logger.info(f"Initialized LLM client: {bot}")
             except Exception as e:
                 logger.error(f"Failed to initialize client for {bot.name}: {e}")
                 raise
@@ -295,74 +309,45 @@ def create_argument_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 🎯 Quick Start Examples:
-  # Premium models (best from each provider)
-  %(prog)s --preset premium
+  # Use latest models (default)
+  %(prog)s
+  
+  # Use latest models with cost tracking
+  %(prog)s --budget-limit 5.0 --show-costs
 
-  # Budget-friendly models
-  %(prog)s --preset budget
+  # Use legacy models
+  %(prog)s --preset legacy
 
-  # All OpenAI models
-  %(prog)s --preset openai
+  # Use agent-based reasoning instead of simple prompts
+  %(prog)s --use-agent
 
-  # Demo with random bots
-  %(prog)s --demo
+  # Play against lowest ELO opponent instead of random moves
+  %(prog)s --opponent lowest-elo
 
   # Custom bot lineup
-  %(prog)s --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet-20241022:Claude-3.5-Sonnet"
-
-  # Custom ELO range with sub-1100 support
-  %(prog)s --preset budget --start-elo 600 --max-elo 1600 --elo-step 100
-
-🧠 Human-like Engine Examples:
-  # Use Maia (most human-like, auto-detected)
-  %(prog)s --preset premium --use-human-engine
-
-  # Specify Maia engine type explicitly
-  %(prog)s --preset budget --use-human-engine --human-engine-type maia
-
-  # Use Leela Chess Zero for human-like play
-  %(prog)s --preset openai --use-human-engine --human-engine-type lczero
-
-  # Human-like Stockfish (fallback option)
-  %(prog)s --preset anthropic --use-human-engine --human-engine-type human_stockfish
-
-  # Custom Maia path
-  %(prog)s --preset premium --use-human-engine --human-engine-path /usr/local/bin/maia
-
-🤖 Bot specification format: "provider:model:name"
-  • provider: openai, anthropic, gemini, random
-  • model: exact model ID (use --list-models to see available)
-  • name: display name for the bot
-
-📋 Available presets: premium, budget, recommended, openai, anthropic, gemini
-
-🏆 Human-like Engines (More Realistic Opponents):
-  • Maia: Neural network trained on human games (most human-like, ELO 600+)
-  • LCZero: Neural network with human-like configuration
-  • Human Stockfish: Traditional Stockfish with human-like settings
-
-  Install Maia: https://github.com/CSSLab/maia-chess
-  Install LCZero: brew install lc0 (macOS) or https://lczero.org/
-
-🎯 Sub-1100 ELO Support:
-  The system supports ELO ratings from 600-2400! For best results at sub-1100 levels:
-  • Install specialized engines: Texel, MadChess, Fruit, or Crafty
-  • Use --use-human-engine for more realistic beginner play
-  • Maia-1100 model will be used for ELO < 1100 when available
-  • WARNING: ELO values below 600 will be automatically corrected to 600
+  %(prog)s --bots "openai:gpt-4o:GPT-4o,anthropic:claude-3-5-sonnet:Claude-3.5-Sonnet"
 
 💰 Budget & Analysis Commands:
-  # Track spending with $5 budget limit
-  %(prog)s --preset premium --budget-limit 5.0 --show-costs
+  # Track spending with budget limit
+  %(prog)s --budget-limit 5.0 --show-costs
 
   # Show leaderboard of best performing models
   %(prog)s --leaderboard 10
 
-  # Compare provider performance
-  %(prog)s --provider-stats
+🤖 Bot specification format: "provider:model:name"
+  • provider: openai, anthropic, gemini
+  • model: exact model ID (use --list-models to see available)
+  • name: display name for the bot
 
-  # Analyze specific model
-  %(prog)s --analyze-model openai:gpt-4o
+📋 Available presets: latest (default), legacy
+
+🎮 Opponent Options:
+  • random: Plays random legal moves (default)
+  • lowest-elo: Plays at 600 ELO strength
+
+🧠 Playing Modes:
+  • Prompt-based: Simple LLM prompting (default)
+  • Agent-based: Tool-based reasoning with analysis (--use-agent)
         """
     )
 
@@ -377,7 +362,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--preset",
         type=str,
         choices=list(PRESET_CONFIGS.keys()),
-        help="Use a predefined set of bots (premium, budget, recommended, openai, anthropic, gemini)"
+        default="latest",
+        help="Use a predefined set of bots (default: latest)"
     )
 
     # Information commands
@@ -423,281 +409,46 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Display detailed cost breakdown during and after benchmark"
     )
 
-    # Engine configuration
-    parser.add_argument(
-        "--stockfish",
-        type=str,
-        help="Path to Stockfish executable (auto-detected if not specified)",
-        dest="stockfish_path",
-    )
-
+    # Opponent configuration
     parser.add_argument(
         "--opponent",
         type=str,
-        choices=["stockfish", "maia", "texel", "madchess"],
-        help="Type of chess engine to use as opponent (default: stockfish)",
+        choices=["random", "lowest-elo"],
+        default="random",
+        help="Choose opponent: random (random legal moves) or lowest-elo (600 ELO) (default: random)"
     )
 
+    # Playing mode configuration
     parser.add_argument(
-        "--opponent-elo",
-        type=int,
-        help="Explicit ELO rating for the opponent engine (minimum: 600, overrides --start-elo)",
-    )
-
-    parser.add_argument(
-        "--movetime-ms",
-        type=int,
-        default=300,
-        help="Fixed time in milliseconds per move for both sides (default: %(default)s)",
-    )
-
-    parser.add_argument(
-        "--adaptive-engines",
-        dest="adaptive_elo_engines",
+        "--use-agent",
         action="store_true",
-        help="Use different engines for different ELO ranges (default: enabled)",
+        help="Use agent-based reasoning with tools instead of simple prompting (default: prompt-based)"
     )
 
-    parser.add_argument(
-        "--no-adaptive-engines",
-        dest="adaptive_elo_engines",
-        action="store_false",
-        help="Don't use different engines for different ELO ranges",
-    )
-    parser.set_defaults(adaptive_elo_engines=True)
-
-    # Human-like engine configuration
-    parser.add_argument(
-        "--use-human-engine",
-        action="store_true",
-        help="Use human-like chess engines instead of Stockfish (more realistic opponents)"
-    )
-    parser.add_argument(
-        "--human-engine-type",
-        type=str,
-        choices=["maia", "lczero", "human_stockfish"],
-        default="maia",
-        help="Type of human-like engine (default: %(default)s)"
-    )
-    parser.add_argument(
-        "--human-engine-path",
-        type=str,
-        help="Path to human-like engine executable (auto-detected if not specified)"
-    )
-    parser.add_argument(
-        "--no-human-engine-fallback",
-        action="store_true",
-        help="Don't fall back to Stockfish if human engines aren't available"
-    )
-
-    # ELO ladder settings
-    parser.add_argument(
-        "--start-elo",
-        type=int,
-        default=600,
-        help="Starting ELO rating (minimum: 600, default: %(default)s)"
-    )
-    parser.add_argument(
-        "--elo-step",
-        type=int,
-        default=100,
-        help="ELO increment per ladder rung (default: %(default)s)"
-    )
-    parser.add_argument(
-        "--max-elo",
-        type=int,
-        default=2400,
-        help="Maximum ELO rating (minimum: 600, default: %(default)s)"
-    )
 
     # Game settings
     parser.add_argument(
-        "--think-time",
-        type=float,
-        default=0.3,
-        help="Engine thinking time per move in seconds (default: %(default)s, overridden by --movetime-ms if specified)"
-    )
-    parser.add_argument(
-        "--max-plies",
+        "--max-games",
         type=int,
-        default=300,
-        help="Maximum half-moves per game (default: %(default)s)"
-    )
-    parser.add_argument(
-        "--escalate-on",
-        type=str,
-        default="always",
-        choices=["always", "on_win"],
-        help="Advance ELO ladder: always or only on wins (default: %(default)s)"
+        default=10,
+        help="Maximum number of games to play per model (default: %(default)s)"
     )
 
-    # LLM settings
-    parser.add_argument(
-        "--llm-timeout",
-        type=float,
-        default=20.0,
-        help="LLM response timeout in seconds (default: %(default)s)"
-    )
-    parser.add_argument(
-        "--llm-temperature",
-        type=float,
-        default=0.0,
-        help="LLM sampling temperature (default: %(default)s)"
-    )
 
-    # Output settings
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="runs",
-        help="Output directory for results (default: %(default)s)"
-    )
-    parser.add_argument(
-        "--no-pgn",
-        action="store_true",
-        help="Skip saving PGN files"
-    )
 
-    # UI settings
-    parser.add_argument(
-        "--refresh-rate",
-        type=int,
-        default=6,
-        help="Dashboard refresh rate in Hz (default: %(default)s)"
-    )
 
-    # Special modes
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Run quick demo (random bots, ELO 600-800 by 100)"
-    )
-    parser.add_argument(
-        "--robot-demo",
-        action="store_true",
-        help="Watch two robots play chess with beautiful board visualization"
-    )
-    parser.add_argument(
-        "--quick-robot-demo",
-        action="store_true",
-        help="Quick robot demo with faster gameplay (no delays)"
-    )
-    parser.add_argument(
-        "--self-test",
-        action="store_true",
-        help="Run internal unit tests and exit"
-    )
-
-    # Logging
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging"
-    )
 
     return parser
 
 
-def validate_elo_arguments(args) -> None:
-    """Validate ELO arguments and warn about values below minimum threshold."""
-    MIN_ELO = 600
-
-    def warn_low_elo(elo_value: int, arg_name: str) -> int:
-        """Warn about low ELO and return corrected value."""
-        if elo_value < MIN_ELO:
-            logger.warning(f"⚠️  {arg_name} {elo_value} is below absolute minimum of {MIN_ELO} ELO")
-            logger.warning(f"   Automatically correcting {arg_name} to {MIN_ELO}")
-            return MIN_ELO
-        return elo_value
-
-    # Validate start_elo
-    if hasattr(args, 'start_elo') and args.start_elo is not None:
-        args.start_elo = warn_low_elo(args.start_elo, "--start-elo")
-
-    # Validate opponent_elo
-    if hasattr(args, 'opponent_elo') and args.opponent_elo is not None:
-        args.opponent_elo = warn_low_elo(args.opponent_elo, "--opponent-elo")
-
-    # Validate max_elo (less critical but still check)
-    if hasattr(args, 'max_elo') and args.max_elo is not None and args.max_elo < MIN_ELO:
-        logger.warning(f"⚠️  --max-elo {args.max_elo} is below absolute minimum of {MIN_ELO} ELO")
-        logger.warning(f"   Setting max-elo to {MIN_ELO} (same as start-elo)")
-        args.max_elo = MIN_ELO
 
 
-def configure_logging(verbose: bool = False, debug: bool = False, suppress_console: bool = False) -> None:
-    """Configure logging based on command-line options."""
-    if debug:
-        level = logging.DEBUG
-    elif verbose:
-        level = logging.INFO
-    else:
-        level = logging.WARNING
-
-    # Configure root logger
-    root_logger = logging.getLogger()
-
-    # Remove existing handlers
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    if not suppress_console:
-        # Add console handler for normal operation
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(
-            logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        )
-        root_logger.addHandler(console_handler)
-    else:
-        # Use null handler to suppress all console output during live display
-        null_handler = logging.NullHandler()
-        root_logger.addHandler(null_handler)
-
-    root_logger.setLevel(level)
-
-    # Reduce noise from some libraries
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("chess.engine").setLevel(logging.WARNING)
 
 
-def run_unit_tests() -> int:
-    """Run built-in unit tests."""
-    import unittest
-    import sys
-    from pathlib import Path
-
-    # Get the project root directory
-    project_root = Path(__file__).parent.parent
-    tests_dir = project_root / "tests"
-
-    if not tests_dir.exists():
-        print("No tests directory found", file=sys.stderr)
-        return 1
-
-    # Discover and run tests
-    loader = unittest.TestLoader()
-    suite = loader.discover(str(tests_dir), pattern='test_*.py')
-
-    runner = unittest.TextTestRunner(verbosity=2, stream=sys.stdout)
-    result = runner.run(suite)
-
-    return 0 if result.wasSuccessful() else 1
 
 
 async def main_async(args: argparse.Namespace) -> int:
     """Main async entry point."""
-    # Configure logging (suppress console during live display)
-    configure_logging(args.verbose, args.debug, suppress_console=True)
-
-    # Validate ELO arguments and warn about values below minimum
-    validate_elo_arguments(args)
-
     # Handle information commands
     if args.list_models:
         print_available_models()
@@ -719,84 +470,62 @@ async def main_async(args: argparse.Namespace) -> int:
         show_leaderboard(args.leaderboard)
         return 0
 
-    if args.provider_stats:
-        show_provider_comparison()
-        return 0
-
-    if args.analyze_model:
-        analyze_model(args.analyze_model)
-        return 0
-
-    # Handle demo mode
-    if args.demo:
-        console.print("[bold yellow]Running demo mode[/bold yellow]")
-        args.bots = "random::demo1,random::demo2"
-        # Only set demo ELO values if they weren't explicitly changed from defaults
-        if args.start_elo == 600:  # Default value wasn't changed
-            args.start_elo = 1400
-        if args.elo_step == 100:  # Default value wasn't changed
-            args.elo_step = 200
-        if args.max_elo == 2400:  # Default value wasn't changed
-            args.max_elo = 1600
-
-    # Handle robot demo mode
-    if args.robot_demo:
-        console.print("[bold cyan]🤖 Starting Robot Chess Battle! 🤖[/bold cyan]")
-        return await robot_demo_mode(args, quick=False)
-
-    # Handle quick robot demo mode
-    if args.quick_robot_demo:
-        console.print("[bold cyan]🚀 Quick Robot Chess Battle! 🚀[/bold cyan]")
-        return await robot_demo_mode(args, quick=True)
-
     # Determine bot configuration
-    if args.preset:
-        if args.preset not in PRESET_CONFIGS:
-            console.print(f"[red]Error: Unknown preset '{args.preset}'[/red]")
-            return 1
-        bot_specs = PRESET_CONFIGS[args.preset]["bots"]
-        bots_string = format_bot_spec_string(bot_specs)
-        console.print(f"[green]Using preset '{args.preset}': {PRESET_CONFIGS[args.preset]['description']}[/green]")
-    elif args.bots:
+    if args.bots:
         bots_string = args.bots
+        console.print(f"[green]Using custom bots[/green]")
     else:
-        # Default to premium preset
-        console.print("[yellow]No bots specified, using premium preset[/yellow]")
-        bot_specs = get_premium_bot_lineup()
+        # Use preset (latest is default)
+        preset_name = args.preset if hasattr(args, 'preset') and args.preset else "latest"
+        if preset_name not in PRESET_CONFIGS:
+            console.print(f"[red]Error: Unknown preset '{preset_name}'[/red]")
+            return 1
+        bot_specs = PRESET_CONFIGS[preset_name]["bots"]
         bots_string = format_bot_spec_string(bot_specs)
+        console.print(f"[green]Using '{preset_name}' models: {PRESET_CONFIGS[preset_name]['description']}[/green]")
 
-    # Handle movetime-ms override for think_time if specified
-    if hasattr(args, 'movetime_ms') and args.movetime_ms:
-        think_time = args.movetime_ms / 1000.0
-        logger.info(f"Using fixed move time of {args.movetime_ms}ms ({think_time}s)")
+    # Handle opponent selection
+    opponent_type = args.opponent if hasattr(args, 'opponent') else "random"
+    if opponent_type == "random":
+        fixed_opponent_elo = 0  # Special value for random moves
+        console.print(f"[green]Using opponent: Random moves[/green]")
+    elif opponent_type == "lowest-elo":
+        fixed_opponent_elo = 600  # Lowest ELO
+        console.print(f"[green]Using opponent: 600 ELO engine[/green]")
     else:
-        think_time = args.think_time
+        fixed_opponent_elo = 0  # Default to random
+        console.print(f"[green]Using opponent: Random moves (default)[/green]")
 
+    # Handle agent mode
+    use_agent = args.use_agent if hasattr(args, 'use_agent') else False
+    max_games = args.max_games if hasattr(args, 'max_games') else 10
+    agent_mode_str = "agent-based reasoning" if use_agent else "prompt-based"
+    console.print(f"[green]Using {agent_mode_str}[/green]")
+    
     # Create configuration
     config = Config(
         bots=bots_string,
-        stockfish_path=args.stockfish_path,
-        use_human_engine=args.use_human_engine,
-        human_engine_type=args.human_engine_type,
-        human_engine_path=args.human_engine_path,
-        human_engine_fallback=not args.no_human_engine_fallback,
-        start_elo=args.opponent_elo if hasattr(args, 'opponent_elo') and args.opponent_elo else args.start_elo,
-        elo_step=args.elo_step,
-        max_elo=args.max_elo,
-        think_time=think_time,
-        max_plies=args.max_plies,
-        escalate_on=args.escalate_on,
-        llm_timeout=args.llm_timeout,
-        llm_temperature=args.llm_temperature,
-        output_dir=args.output_dir,
-        save_pgn=not args.no_pgn,
-        refresh_rate=args.refresh_rate,
-        opponent_type=args.opponent if hasattr(args, 'opponent') else None
+        fixed_opponent_elo=fixed_opponent_elo,
+        use_agent=use_agent,
+        # Set simple defaults for required fields
+        start_elo=600,
+        elo_step=100, 
+        max_elo=2400,
+        think_time=1.0,
+        max_plies=200,
+        llm_timeout=30.0,
+        llm_temperature=0.0,
+        output_dir="runs",
+        save_pgn=True,
+        escalate_on="always",
+        agent_strategy="balanced",
+        verbose_agent=False,
+        refresh_rate=6
     )
 
-    # Add budget tracking configuration
-    config.budget_limit = args.budget_limit
-    config.show_costs = args.show_costs
+    # Add budget tracking configuration  
+    config.budget_limit = args.budget_limit if hasattr(args, 'budget_limit') else None
+    config.show_costs = args.show_costs if hasattr(args, 'show_costs') else False
 
     # Create and run benchmark
     try:
@@ -817,159 +546,12 @@ async def main_async(args: argparse.Namespace) -> int:
         return 1
 
 
-async def robot_demo_mode(args: argparse.Namespace, quick: bool = False) -> int:
-    """
-    Run a beautiful robot vs robot demo with live chess board visualization.
-    """
-
-    console.print("\n[bold cyan]Setting up robot chess battle...[/bold cyan]")
-
-    # Configure for robot demo
-    if quick:
-        config = Config(
-            think_time=0.1,  # Fast gameplay
-            max_plies=60,    # Shorter games
-            llm_timeout=5.0,
-            save_pgn=True
-        )
-    else:
-        config = Config(
-            think_time=1.5,  # Slower for dramatic effect
-            max_plies=100,
-            llm_timeout=10.0,
-            save_pgn=True
-        )
-
-    # Configure engine settings
-    config.adaptive_elo_engines = True
-    config.use_human_engine = True
-
-    # Create two robots
-    white_bot = LLMClient(parse_bot_spec("random::WhiteBot")[0])
-    black_bot = LLMClient(parse_bot_spec("random::BlackBot")[0])
-
-    # Create adaptive engine
-    try:
-        engine = create_engine(config)
-        await engine.start()
-        logger.info(f"Using engine: {engine.current_engine_type if isinstance(engine, AdaptiveEngine) else 'stockfish'}")
-    except Exception as e:
-        console.print(f"[red]Error: Failed to initialize chess engine: {e}[/red]")
-        return 1
-
-    # Initialize game
-    board = chess.Board()
-    moves_played = []
-    game_active = True
-
-    if quick:
-        console.print("\n[bold green]⚡ Quick Robot Chess Battle Starting![/bold green]")
-        console.print("[yellow]Press Ctrl+C to stop the demo[/yellow]\n")
-    else:
-        console.print("\n[bold green]🎮 Robot Chess Battle Starting![/bold green]")
-        console.print("[yellow]Press Ctrl+C to stop the demo[/yellow]\n")
-
-    try:
-        move_count = 0
-        max_moves = 30 if quick else 50
-        while game_active and not board.is_game_over() and move_count < max_moves:
-            # Clear screen for animation effect
-            console.clear()
-
-            # Determine current player
-            current_bot = white_bot if board.turn == chess.WHITE else black_bot
-            bot_name = "WhiteBot" if board.turn == chess.WHITE else "BlackBot"
-            opponent_name = "BlackBot" if board.turn == chess.WHITE else "WhiteBot"
-
-            # Show current position
-            last_move = moves_played[-1] if moves_played else None
-            battle_panel = render_robot_battle(
-                board=board,
-                white_bot="🤖 WhiteBot",
-                black_bot="🤖 BlackBot",
-                last_move=last_move,
-                engine_elo=None,
-                moves=moves_played
-            )
-
-            console.print(battle_panel)
-
-            if board.is_game_over():
-                break
-
-            if not quick:
-                # Show thinking animation
-                status = f"🤔 {bot_name} is thinking..."
-                console.print(f"\n[bold yellow]{status}[/bold yellow]")
-
-                # Add dramatic pause
-                await asyncio.sleep(2.0)
-            else:
-                # Quick mode - minimal delay
-                await asyncio.sleep(0.1)
-
-            # Get move from current bot
-            try:
-                move = await current_bot.pick_move(board, temperature=0.3)
-                # Get SAN notation BEFORE pushing the move
-                move_san = board.san(move) if move in board.legal_moves else move.uci()
-                moves_played.append(move)
-                board.push(move)
-                move_count += 1
-
-                # Show the move
-                if quick:
-                    console.print(f"[bold green]⚡ {bot_name}: {move_san}[/bold green]")
-                    await asyncio.sleep(0.2)
-                else:
-                    console.print(f"[bold green]⚡ {bot_name} plays: {move_san}[/bold green]")
-                    await asyncio.sleep(1.0)
-
-            except Exception as e:
-                console.print(f"[red]Error: {bot_name} failed to make a move: {e}[/red]")
-                break
-
-        # Final position
-        console.clear()
-        final_panel = render_robot_battle(
-            board=board,
-            white_bot="🤖 WhiteBot",
-            black_bot="🤖 BlackBot",
-            last_move=moves_played[-1] if moves_played else None,
-            moves=moves_played
-        )
-        console.print(final_panel)
-
-        # Game result
-        result = board.result()
-        if result == "1-0":
-            console.print("\n[bold green]🏆 WhiteBot wins![/bold green]")
-        elif result == "0-1":
-            console.print("\n[bold green]🏆 BlackBot wins![/bold green]")
-        elif result == "1/2-1/2":
-            console.print("\n[bold yellow]🤝 It's a draw![/bold yellow]")
-        else:
-            console.print("\n[bold blue]🎮 Demo ended[/bold blue]")
-
-        console.print(f"\n[dim]Total moves: {len(moves_played)}[/dim]")
-
-    except KeyboardInterrupt:
-        console.print("\n[bold yellow]⏸️  Demo stopped by user[/bold yellow]")
-    finally:
-        await engine.stop()
-
-    return 0
 
 
 def main() -> int:
-
     """Main entry point."""
     parser = create_argument_parser()
     args = parser.parse_args()
-
-    # Handle self-test mode
-    if args.self_test:
-        return run_unit_tests()
 
     # Run main benchmark
     try:

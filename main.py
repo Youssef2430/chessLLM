@@ -19,6 +19,11 @@ Quick Examples:
     # Custom ELO ladder
     python main.py --bots "random::test" --start-elo 800 --max-elo 1600 --elo-step 200
 
+    # Play against fixed opponent strengths
+    python main.py --preset premium --fixed-opponent-elo 1200
+    python main.py --preset budget --fixed-opponent-elo random
+    python main.py --use-agent --show-costs --budget-limit 10.0 --preset premium --fixed-opponent-elo 800
+
 Requirements:
     - Python 3.8+
     - Stockfish chess engine installed and in PATH

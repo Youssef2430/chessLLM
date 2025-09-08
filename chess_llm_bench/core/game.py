@@ -235,6 +235,11 @@ class GameRunner:
 
     async def _get_engine_move(self, board: chess.Board, state: LiveState, elo: int) -> chess.Move:
         """Get a move from the chess engine or human-like engine."""
+        # Special handling for random opponent (ELO 0)
+        if self.config.fixed_opponent_elo == 0:
+            state.status = f"vs Random (Random thinking...)"
+            return self._get_random_move(board)
+        
         if self._is_human_engine:
             if AdaptiveEngine and isinstance(self.engine, AdaptiveEngine):
                 engine_name = self.engine.current_engine_type
@@ -245,6 +250,14 @@ class GameRunner:
         else:
             state.status = f"vs {elo} (Stockfish thinking...)"
         return await self.engine.get_move(board)
+    
+    def _get_random_move(self, board: chess.Board) -> chess.Move:
+        """Get a completely random legal move."""
+        import random
+        legal_moves = list(board.legal_moves)
+        if not legal_moves:
+            raise Exception("No legal moves available")
+        return random.choice(legal_moves)
 
     def _execute_move(
         self,
@@ -281,7 +294,10 @@ class GameRunner:
         game.headers["Round"] = str(self._game_counter)
 
         # Determine engine name and type
-        if self._is_human_engine:
+        if self.config.fixed_opponent_elo == 0:  # Random opponent
+            engine_name = "Random"
+            engine_type_header = "Random"
+        elif self._is_human_engine:
             if AdaptiveEngine and isinstance(self.engine, AdaptiveEngine):
                 engine_type = self.engine.current_engine_type
                 engine_name = f"{engine_type.title()}({elo})"
@@ -394,6 +410,9 @@ class LadderRunner:
         Returns:
             Tuple of (max_elo_reached, list_of_game_records)
         """
+        # Check if we're in fixed ELO mode
+        if self.config.fixed_opponent_elo is not None:
+            return await self._run_fixed_elo_games(output_dir, state, bot_stats)
         # Use config defaults if not specified
         current_elo = start_elo or self.config.start_elo
         max_target_elo = max_elo or self.config.max_elo
@@ -505,6 +524,123 @@ class LadderRunner:
         logger.info(f"Ladder run completed. Max ELO reached: {max_elo_reached}. Total game time: {bot_stats.total_game_duration:.2f}s, Average game time: {bot_stats.average_game_duration:.2f}s")
 
         return max_elo_reached, games
+
+    async def _run_fixed_elo_games(
+        self,
+        output_dir: Path,
+        state: LiveState,
+        bot_stats: LadderStats,
+        num_games: int = 10
+    ) -> Tuple[int, list[GameRecord]]:
+        """
+        Run multiple games against a fixed opponent ELO instead of climbing a ladder.
+
+        Args:
+            output_dir: Output directory for game files
+            state: Live state for UI updates
+            bot_stats: Bot statistics for real-time updates
+            num_games: Number of games to play (default: 10)
+
+        Returns:
+            Tuple of (fixed_elo, list_of_game_records)
+        """
+        fixed_elo = self.config.fixed_opponent_elo
+        games: list[GameRecord] = []
+        
+        # Handle special case for random opponent
+        if fixed_elo == 0:  # 0 means random moves
+            opponent_name = "Random"
+            state.ladder.append(0)  # Display "Random" in ladder
+            logger.info(f"Starting fixed opponent run against Random opponent ({num_games} games)")
+        else:
+            opponent_name = f"ELO {fixed_elo}"
+            state.ladder.append(fixed_elo)
+            logger.info(f"Starting fixed opponent run against ELO {fixed_elo} ({num_games} games)")
+
+        # Initialize opening book
+        from .openings import OpeningBook
+        opening_book = OpeningBook()
+
+        for game_num in range(1, num_games + 1):
+            try:
+                # Alternate colors: LLM plays white on odd games, black on even games
+                llm_plays_white = game_num % 2 == 1
+                color_name = "White" if llm_plays_white else "Black"
+                
+                state.status = f"Game {game_num}/{num_games} as {color_name} vs {opponent_name}..."
+                
+                # Get balanced opening for the current color
+                if llm_plays_white:
+                    opening_white, opening_black = opening_book.get_balanced_pair()
+                    opening_moves = opening_white[2]
+                    opening_name = opening_white[1]
+                    opening_eco = opening_white[0]
+                else:
+                    opening_white, opening_black = opening_book.get_balanced_pair()
+                    opening_moves = opening_black[2]
+                    opening_name = opening_black[1]
+                    opening_eco = opening_black[0]
+
+                logger.info(f"Game {game_num}: Playing with opening: {opening_name} (ECO {opening_eco}) as {color_name}")
+
+                # Handle random opponent specially
+                if fixed_elo == 0:
+                    # Use random opponent logic, not engine at ELO 600
+                    game_record = await self.game_runner.play_game(
+                        random_opponent=True,
+                        output_dir=output_dir,
+                        state=state,
+                        llm_plays_white=llm_plays_white,
+                        opening_moves=opening_moves
+                    )
+                else:
+                    game_elo = fixed_elo
+                    # Play the game with engine at specified ELO
+                    game_record = await self.game_runner.play_game(
+                        elo=game_elo,
+                        output_dir=output_dir,
+                        state=state,
+                        llm_plays_white=llm_plays_white,
+                        opening_moves=opening_moves
+                    )
+                
+                # Override the ELO in the record to reflect the actual fixed ELO
+                game_record.elo = fixed_elo
+                games.append(game_record)
+
+                # Collect timing statistics from LLM
+                total_time, illegal_attempts, _ = self.game_runner.llm.get_move_stats()
+
+                # Update statistics in real-time
+                bot_stats.add_game(game_record)
+                bot_stats.add_timing_stats(total_time, illegal_attempts)
+
+                # Reset stats for next game
+                self.game_runner.llm.reset_move_stats()
+
+                # Brief pause between games
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                logger.error(f"Fixed ELO game {game_num} failed: {e}")
+                state.set_error(f"Failed at game {game_num}: {str(e)}")
+                break
+
+        # Calculate results
+        if games:
+            wins = sum(1 for game in games if game.llm_won)
+            draws = sum(1 for game in games if game.is_draw)
+            losses = sum(1 for game in games if game.llm_lost)
+            win_rate = wins / len(games) * 100
+            
+            logger.info(f"Fixed ELO run completed against {opponent_name}. "
+                       f"Games: {len(games)}, Wins: {wins}, Draws: {draws}, Losses: {losses}, "
+                       f"Win rate: {win_rate:.1f}%, "
+                       f"Average game time: {bot_stats.average_game_duration:.2f}s")
+        else:
+            logger.warning("No games completed in fixed ELO run")
+
+        return fixed_elo, games
 
     def _should_advance(self, game_record: GameRecord) -> bool:
         """
