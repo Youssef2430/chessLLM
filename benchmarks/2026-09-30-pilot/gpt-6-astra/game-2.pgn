@@ -1,0 +1,15 @@
+[Event "Chess LLM · protocol 3"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "2"]
+[White "Stockfish (1320)"]
+[Black "gpt-6-astra"]
+[Result "0-1"]
+[Opening "King's Indian Defense"]
+[ECO "E60"]
+[Protocol "3-subscription"]
+[ReasoningEffort "high"]
+[Termination "checkmate"]
+[Seed "43"]
+
+1. d4 Nf6 2. c4 g6 3. Nf3 Bg7 4. g3 O-O 5. h3 d5 6. Bg2 dxc4 7. Ne5 c5 8. d5 Nxd5 9. Nxf7 Rxf7 10. Bxd5 e6 11. Be4 Qxd1+ 12. Kxd1 Rxf2 13. Na3 c3 14. Nc4 Nc6 15. bxc3 Bxc3 16. Bb2 Bxb2 17. Bxc6 Bxa1 18. Bf3 Bd4 19. h4 e5 20. h5 Be6 21. Bxb7 Rb8 22. Bc8 Bxc4 23. h6 Rxc8 24. a4 Rxe2 25. g4 Be3 26. Re1 Rd8# 0-1

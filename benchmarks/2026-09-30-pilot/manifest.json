@@ -1,0 +1,416 @@
+{
+  "protocol": "3-subscription",
+  "schema_version": 3,
+  "started_at": "2026-09-29T23:57:45.307219+00:00",
+  "last_stopped_at": "2026-09-30T04:39:34.055579+00:00",
+  "settings": {
+    "games": 2,
+    "max_plies": 200,
+    "seed": 42,
+    "effort": "high",
+    "timeout": 360.0,
+    "attempts": 3,
+    "structured": true,
+    "prompt_style": "checklist",
+    "think_time": 0.3,
+    "opponent_elo": 1320,
+    "models": [
+      "gpt-6-astra",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "gemini-3.1-pro",
+      "gemini-3.8-flash"
+    ],
+    "offline": false,
+    "codex_concurrency": 3
+  },
+  "requested_models": [
+    "gpt-6-astra",
+    "gpt-6-sol",
+    "gpt-6-luna",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "gemini-3.1-pro",
+    "gemini-3.8-flash"
+  ],
+  "python": "3.13.7",
+  "billing_route": "subscription_cli",
+  "api_key_fallback": false,
+  "output_token_cap": null,
+  "temperature": null,
+  "analysis_assistance": false,
+  "config": {
+    "max_games": 2,
+    "max_plies": 200,
+    "seed": 42,
+    "reasoning_effort": "high",
+    "fixed_opponent_elo": 1320,
+    "think_time": 0.3,
+    "codex_concurrency": 3
+  },
+  "schedule": [
+    {
+      "game_id": "1",
+      "pair_id": 1,
+      "eco": "E60",
+      "opening": "King's Indian Defense",
+      "opening_moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6"
+      ],
+      "white": true,
+      "seed": 42
+    },
+    {
+      "game_id": "2",
+      "pair_id": 1,
+      "eco": "E60",
+      "opening": "King's Indian Defense",
+      "opening_moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6"
+      ],
+      "white": false,
+      "seed": 43
+    }
+  ],
+  "source_hashes": {
+    "runner.py": "7600a517623a4df254eab13f3c954d9db07a9488efa779fa06c6c7cc7f2eda78",
+    "__init__.py": "7f7e990ca59fd85f9c659eaee9c0f22ede2b912aba8aa0644f1e276d38131fcd",
+    "subscription_run.py": "053810eaee4dba918606a81b85885def7cd511b2227b81d5e7aee53d48a5c767",
+    "watch_run.py": "f57e469ce46f563b630ee3d553474ad86f8fa8ade7fe2f5f2a3703f42e1bc876",
+    "cli.py": "94e04a88c0d1b1fae37090e60f1e462bad154af3b83fd272624cab694ed3d213",
+    "analyze_run.py": "1b898dea731370ccf114ab5575f605c496d7f78a639b6c43743dab89c0c053f4",
+    "figures.py": "bf4fae6aee2489ce48b4497ea9e3ada88cea98bdf46b755d57525078000aafe8",
+    "observatory.py": "b28b61684cb67359e816be25cf46a1bfbf1f1beb5c5b817b3cf5076016e9cb33",
+    "ui/board.py": "8644d867717c8c0106ed2ae8daa6a69cc3169b9dc15b54fdb9ace65d4b4296df",
+    "ui/__init__.py": "f3aa2405182affa5402c93e93340fb9fbbcc435207bfcd0b744c8c21c968581f",
+    "ui/dashboard.py": "68aca25b40e6d7a42ddcd61780bff38523a506f50969f9b6f4aaa1760650d62f",
+    "llm/models.py": "fc78caec0858473e6a7f9fdc63d27367194b1ae362a599b342ccbe0e40544988",
+    "llm/antigravity_acp.py": "fef7d6f3b0b39b4f1ebf3ee7faca2419defabb5d67e2be079da493ad5336c20c",
+    "llm/subscription.py": "ab200aaf1f71986b9233c77e6e86cf151e1baf705b28e77b968315aa86cff7e8",
+    "llm/client.py": "a0659d41531d3986ff2f29796282b6e74e97bd7eaca424d76766ac67bc308d7c",
+    "llm/__init__.py": "c5bc63e595f8918fb76c99b7233cc0e0d7789744af936768035ecceb4f4eb348",
+    "llm/decision.py": "bffeae4f239466a7426572429e54bca269a546df7c48703abdb39161c8d050ce",
+    "core/moves.py": "7e4e31eb550364f847a1adafe51a419fc0c61b348acd66bef7c59747630fdf84",
+    "core/journal.py": "263c725bd525b329e97b3b568213f087962ce405cc01149479784cb8b9d650c5",
+    "core/models.py": "a37d56852d93f747f5584998f029935a96bbaccf3b1b83095f55e2f7fcc0deb3",
+    "core/results.py": "95a346059d8429e06d5695c5fb58b27bed86abfed739af5e216433963ec37d1f",
+    "core/game.py": "dd24caaf1298a4b560511deaea47f602bfa87ae69ef48dfed296c93651128017",
+    "core/budget.py": "273dc11c013415890edef723536886507f431f39bdb3f80987e72313b3319004",
+    "core/__init__.py": "6bb4b8a81afdccd0724ffdfe26f87a908ff2fa0b6f3a85bf08e76bc52ccdb6e8",
+    "core/engine.py": "322b5ebe67f552f17c2248588c1794dd1abaa4d53c9613554c0c5b4d73de17b2",
+    "core/human_engine.py": "92cf2a7679ba631232139af7ef91b7bb8b06da36561d5f2ccc6cbe783279a735",
+    "core/estimate.py": "5c9f82f3808dd5cd681bb3ffa8f1fb613d0a8359b03a817811682dd14c5c73d2",
+    "core/openings.py": "57e35e271d74c7a559972c7967b5fd053d7294ef8cfdb291ff4fd5b53358dc0c",
+    "core/adaptive_engine.py": "5fcfb34bb0b1b3d53aa8249757286e14857c6df91a5acf3c672551a5d2d1b484",
+    "llm/agents/base_agent.py": "63ab18d5fbf4f8637700db449da1b97c1c7379bb75548cff41fa92651f9e590a",
+    "llm/agents/__init__.py": "9dddf51395d09ead7ea955240e8bb6838115602e97e639755e19e6141880d062",
+    "llm/agents/llm_agent_provider.py": "6d998d869b21ec2ef34a837d6067618976d1c23eddc839ce45dbe2fed4117e1b",
+    "llm/agents/chess_tools.py": "f8e888617d8691d71cd6e760c5c92e7c31b45d82e2868a184101aed033f5fc2c"
+  },
+  "analysis_plan": {
+    "kind": "small_pilot",
+    "games_per_model": 2,
+    "project_to_games": 10,
+    "caution": "Projected outcomes are exploratory point estimates from one opening pair, not observed games or established model rankings."
+  },
+  "source_run": "improved-v3-20260929-02",
+  "export_policy": "Allowlisted chess data; no raw prompts/responses, client traces, authentication details, local paths or process IDs.",
+  "engine": {
+    "name": "Stockfish 17.1",
+    "native_elo_range": [
+      1320,
+      3190
+    ],
+    "sha256": "4cae5aac3cb32726ae2564155761faf7ab9ed79be479ecd3f776f70dd90382ef"
+  },
+  "clients": {
+    "antigravity": {
+      "available": true,
+      "version": "agy_acp_server_1.1.1"
+    },
+    "claude": {
+      "available": true,
+      "version": "2.1.284 (Claude Code)"
+    },
+    "codex": {
+      "available": true,
+      "version": "codex-cli 0.156.0"
+    }
+  },
+  "executions": [
+    {
+      "started_at": "2026-09-29T23:57:45.544038+00:00",
+      "resume": false,
+      "source_hashes": {
+        "runner.py": "7600a517623a4df254eab13f3c954d9db07a9488efa779fa06c6c7cc7f2eda78",
+        "__init__.py": "7f7e990ca59fd85f9c659eaee9c0f22ede2b912aba8aa0644f1e276d38131fcd",
+        "subscription_run.py": "053810eaee4dba918606a81b85885def7cd511b2227b81d5e7aee53d48a5c767",
+        "watch_run.py": "f57e469ce46f563b630ee3d553474ad86f8fa8ade7fe2f5f2a3703f42e1bc876",
+        "cli.py": "94e04a88c0d1b1fae37090e60f1e462bad154af3b83fd272624cab694ed3d213",
+        "analyze_run.py": "1b898dea731370ccf114ab5575f605c496d7f78a639b6c43743dab89c0c053f4",
+        "figures.py": "bf4fae6aee2489ce48b4497ea9e3ada88cea98bdf46b755d57525078000aafe8",
+        "observatory.py": "b28b61684cb67359e816be25cf46a1bfbf1f1beb5c5b817b3cf5076016e9cb33",
+        "ui/board.py": "8644d867717c8c0106ed2ae8daa6a69cc3169b9dc15b54fdb9ace65d4b4296df",
+        "ui/__init__.py": "f3aa2405182affa5402c93e93340fb9fbbcc435207bfcd0b744c8c21c968581f",
+        "ui/dashboard.py": "68aca25b40e6d7a42ddcd61780bff38523a506f50969f9b6f4aaa1760650d62f",
+        "llm/models.py": "fc78caec0858473e6a7f9fdc63d27367194b1ae362a599b342ccbe0e40544988",
+        "llm/antigravity_acp.py": "fef7d6f3b0b39b4f1ebf3ee7faca2419defabb5d67e2be079da493ad5336c20c",
+        "llm/subscription.py": "ab200aaf1f71986b9233c77e6e86cf151e1baf705b28e77b968315aa86cff7e8",
+        "llm/client.py": "a0659d41531d3986ff2f29796282b6e74e97bd7eaca424d76766ac67bc308d7c",
+        "llm/__init__.py": "c5bc63e595f8918fb76c99b7233cc0e0d7789744af936768035ecceb4f4eb348",
+        "llm/decision.py": "bffeae4f239466a7426572429e54bca269a546df7c48703abdb39161c8d050ce",
+        "core/moves.py": "7e4e31eb550364f847a1adafe51a419fc0c61b348acd66bef7c59747630fdf84",
+        "core/journal.py": "263c725bd525b329e97b3b568213f087962ce405cc01149479784cb8b9d650c5",
+        "core/models.py": "a37d56852d93f747f5584998f029935a96bbaccf3b1b83095f55e2f7fcc0deb3",
+        "core/results.py": "95a346059d8429e06d5695c5fb58b27bed86abfed739af5e216433963ec37d1f",
+        "core/game.py": "dd24caaf1298a4b560511deaea47f602bfa87ae69ef48dfed296c93651128017",
+        "core/budget.py": "273dc11c013415890edef723536886507f431f39bdb3f80987e72313b3319004",
+        "core/__init__.py": "6bb4b8a81afdccd0724ffdfe26f87a908ff2fa0b6f3a85bf08e76bc52ccdb6e8",
+        "core/engine.py": "322b5ebe67f552f17c2248588c1794dd1abaa4d53c9613554c0c5b4d73de17b2",
+        "core/human_engine.py": "92cf2a7679ba631232139af7ef91b7bb8b06da36561d5f2ccc6cbe783279a735",
+        "core/estimate.py": "5c9f82f3808dd5cd681bb3ffa8f1fb613d0a8359b03a817811682dd14c5c73d2",
+        "core/openings.py": "57e35e271d74c7a559972c7967b5fd053d7294ef8cfdb291ff4fd5b53358dc0c",
+        "core/adaptive_engine.py": "5fcfb34bb0b1b3d53aa8249757286e14857c6df91a5acf3c672551a5d2d1b484",
+        "llm/agents/base_agent.py": "63ab18d5fbf4f8637700db449da1b97c1c7379bb75548cff41fa92651f9e590a",
+        "llm/agents/__init__.py": "9dddf51395d09ead7ea955240e8bb6838115602e97e639755e19e6141880d062",
+        "llm/agents/llm_agent_provider.py": "6d998d869b21ec2ef34a837d6067618976d1c23eddc839ce45dbe2fed4117e1b",
+        "llm/agents/chess_tools.py": "f8e888617d8691d71cd6e760c5c92e7c31b45d82e2868a184101aed033f5fc2c"
+      }
+    },
+    {
+      "started_at": "2026-09-30T00:21:51.854882+00:00",
+      "resume": true,
+      "source_hashes": {
+        "runner.py": "b65560f8e3e0fecb2e7a44e2c4133aa0f04ba5a1a04441cdec5ec63f68f95b39",
+        "notify_run.py": "6a0d5f2f3e0bbd00703aadca29493407e63717836ed1339d24ae1aac65167725",
+        "__init__.py": "7f7e990ca59fd85f9c659eaee9c0f22ede2b912aba8aa0644f1e276d38131fcd",
+        "subscription_run.py": "053810eaee4dba918606a81b85885def7cd511b2227b81d5e7aee53d48a5c767",
+        "watch_run.py": "f57e469ce46f563b630ee3d553474ad86f8fa8ade7fe2f5f2a3703f42e1bc876",
+        "cli.py": "94e04a88c0d1b1fae37090e60f1e462bad154af3b83fd272624cab694ed3d213",
+        "analyze_run.py": "1b898dea731370ccf114ab5575f605c496d7f78a639b6c43743dab89c0c053f4",
+        "figures.py": "bf4fae6aee2489ce48b4497ea9e3ada88cea98bdf46b755d57525078000aafe8",
+        "observatory.py": "b28b61684cb67359e816be25cf46a1bfbf1f1beb5c5b817b3cf5076016e9cb33",
+        "ui/board.py": "8644d867717c8c0106ed2ae8daa6a69cc3169b9dc15b54fdb9ace65d4b4296df",
+        "ui/__init__.py": "f3aa2405182affa5402c93e93340fb9fbbcc435207bfcd0b744c8c21c968581f",
+        "ui/dashboard.py": "68aca25b40e6d7a42ddcd61780bff38523a506f50969f9b6f4aaa1760650d62f",
+        "llm/models.py": "fc78caec0858473e6a7f9fdc63d27367194b1ae362a599b342ccbe0e40544988",
+        "llm/antigravity_acp.py": "fef7d6f3b0b39b4f1ebf3ee7faca2419defabb5d67e2be079da493ad5336c20c",
+        "llm/subscription.py": "e016c247f745edf298eb76346533f9296621ccc57151da5427a7d2d3b51d691b",
+        "llm/client.py": "a0659d41531d3986ff2f29796282b6e74e97bd7eaca424d76766ac67bc308d7c",
+        "llm/__init__.py": "c5bc63e595f8918fb76c99b7233cc0e0d7789744af936768035ecceb4f4eb348",
+        "llm/decision.py": "bffeae4f239466a7426572429e54bca269a546df7c48703abdb39161c8d050ce",
+        "core/moves.py": "7e4e31eb550364f847a1adafe51a419fc0c61b348acd66bef7c59747630fdf84",
+        "core/journal.py": "263c725bd525b329e97b3b568213f087962ce405cc01149479784cb8b9d650c5",
+        "core/models.py": "a37d56852d93f747f5584998f029935a96bbaccf3b1b83095f55e2f7fcc0deb3",
+        "core/results.py": "95a346059d8429e06d5695c5fb58b27bed86abfed739af5e216433963ec37d1f",
+        "core/game.py": "dd24caaf1298a4b560511deaea47f602bfa87ae69ef48dfed296c93651128017",
+        "core/budget.py": "273dc11c013415890edef723536886507f431f39bdb3f80987e72313b3319004",
+        "core/__init__.py": "6bb4b8a81afdccd0724ffdfe26f87a908ff2fa0b6f3a85bf08e76bc52ccdb6e8",
+        "core/engine.py": "322b5ebe67f552f17c2248588c1794dd1abaa4d53c9613554c0c5b4d73de17b2",
+        "core/human_engine.py": "92cf2a7679ba631232139af7ef91b7bb8b06da36561d5f2ccc6cbe783279a735",
+        "core/estimate.py": "5c9f82f3808dd5cd681bb3ffa8f1fb613d0a8359b03a817811682dd14c5c73d2",
+        "core/openings.py": "57e35e271d74c7a559972c7967b5fd053d7294ef8cfdb291ff4fd5b53358dc0c",
+        "core/adaptive_engine.py": "5fcfb34bb0b1b3d53aa8249757286e14857c6df91a5acf3c672551a5d2d1b484",
+        "llm/agents/base_agent.py": "63ab18d5fbf4f8637700db449da1b97c1c7379bb75548cff41fa92651f9e590a",
+        "llm/agents/__init__.py": "9dddf51395d09ead7ea955240e8bb6838115602e97e639755e19e6141880d062",
+        "llm/agents/llm_agent_provider.py": "6d998d869b21ec2ef34a837d6067618976d1c23eddc839ce45dbe2fed4117e1b",
+        "llm/agents/chess_tools.py": "f8e888617d8691d71cd6e760c5c92e7c31b45d82e2868a184101aed033f5fc2c"
+      }
+    },
+    {
+      "started_at": "2026-09-30T01:08:06.498856+00:00",
+      "resume": true,
+      "source_hashes": {
+        "runner.py": "92fb35e7e7122fd971e5b5e08e1d2dd6b4dd7bafa4586e9444ae3b6022814975",
+        "notify_run.py": "17f68255f7fff5da7184dc5abfa7f7e7eaa238aa5e2ccd05d52248ee3603a2ca",
+        "__init__.py": "7f7e990ca59fd85f9c659eaee9c0f22ede2b912aba8aa0644f1e276d38131fcd",
+        "subscription_run.py": "ea6892b6fea7ea35b8fa4059b4288646eaadb5797ddb29a0e6fe603bc5caa67c",
+        "watch_run.py": "f57e469ce46f563b630ee3d553474ad86f8fa8ade7fe2f5f2a3703f42e1bc876",
+        "cli.py": "94e04a88c0d1b1fae37090e60f1e462bad154af3b83fd272624cab694ed3d213",
+        "analyze_run.py": "1b898dea731370ccf114ab5575f605c496d7f78a639b6c43743dab89c0c053f4",
+        "figures.py": "ef1f1ccf5f1677fa9f3bf9cdc79440eafd2ac3e58771d892f367ceebc215bd1e",
+        "observatory.py": "c6b7bf22754c6b223d6d4d0cd19e35c6ff234c4a92a96a31f0533986832323bd",
+        "ui/board.py": "8644d867717c8c0106ed2ae8daa6a69cc3169b9dc15b54fdb9ace65d4b4296df",
+        "ui/__init__.py": "f3aa2405182affa5402c93e93340fb9fbbcc435207bfcd0b744c8c21c968581f",
+        "ui/dashboard.py": "68aca25b40e6d7a42ddcd61780bff38523a506f50969f9b6f4aaa1760650d62f",
+        "llm/models.py": "fc78caec0858473e6a7f9fdc63d27367194b1ae362a599b342ccbe0e40544988",
+        "llm/antigravity_acp.py": "fef7d6f3b0b39b4f1ebf3ee7faca2419defabb5d67e2be079da493ad5336c20c",
+        "llm/subscription.py": "f770c84ab990a66bc50b34d94ece5af05cebc7393360de9dc0706f0d0b85450d",
+        "llm/client.py": "a0659d41531d3986ff2f29796282b6e74e97bd7eaca424d76766ac67bc308d7c",
+        "llm/__init__.py": "c5bc63e595f8918fb76c99b7233cc0e0d7789744af936768035ecceb4f4eb348",
+        "llm/decision.py": "e6b194278ace91bfc94c1e6cb880396edb249d0964e53904dfcaca43da6b321d",
+        "core/moves.py": "7e4e31eb550364f847a1adafe51a419fc0c61b348acd66bef7c59747630fdf84",
+        "core/journal.py": "263c725bd525b329e97b3b568213f087962ce405cc01149479784cb8b9d650c5",
+        "core/models.py": "a37d56852d93f747f5584998f029935a96bbaccf3b1b83095f55e2f7fcc0deb3",
+        "core/results.py": "95a346059d8429e06d5695c5fb58b27bed86abfed739af5e216433963ec37d1f",
+        "core/game.py": "dd24caaf1298a4b560511deaea47f602bfa87ae69ef48dfed296c93651128017",
+        "core/budget.py": "273dc11c013415890edef723536886507f431f39bdb3f80987e72313b3319004",
+        "core/__init__.py": "6bb4b8a81afdccd0724ffdfe26f87a908ff2fa0b6f3a85bf08e76bc52ccdb6e8",
+        "core/engine.py": "322b5ebe67f552f17c2248588c1794dd1abaa4d53c9613554c0c5b4d73de17b2",
+        "core/human_engine.py": "92cf2a7679ba631232139af7ef91b7bb8b06da36561d5f2ccc6cbe783279a735",
+        "core/estimate.py": "5c9f82f3808dd5cd681bb3ffa8f1fb613d0a8359b03a817811682dd14c5c73d2",
+        "core/openings.py": "57e35e271d74c7a559972c7967b5fd053d7294ef8cfdb291ff4fd5b53358dc0c",
+        "core/adaptive_engine.py": "5fcfb34bb0b1b3d53aa8249757286e14857c6df91a5acf3c672551a5d2d1b484",
+        "llm/agents/base_agent.py": "63ab18d5fbf4f8637700db449da1b97c1c7379bb75548cff41fa92651f9e590a",
+        "llm/agents/__init__.py": "9dddf51395d09ead7ea955240e8bb6838115602e97e639755e19e6141880d062",
+        "llm/agents/llm_agent_provider.py": "6d998d869b21ec2ef34a837d6067618976d1c23eddc839ce45dbe2fed4117e1b",
+        "llm/agents/chess_tools.py": "f8e888617d8691d71cd6e760c5c92e7c31b45d82e2868a184101aed033f5fc2c"
+      }
+    }
+  ],
+  "amendments": [
+    {
+      "timestamp": "2026-09-30T00:21:49.822651+00:00",
+      "reason": "User requested only 2\u20133 games per model, then extrapolate results.",
+      "original_games": 10,
+      "new_games": 2,
+      "original_schedule": [
+        {
+          "game_id": "1",
+          "pair_id": 1,
+          "eco": "E60",
+          "opening": "King's Indian Defense",
+          "opening_moves": [
+            "d2d4",
+            "g8f6",
+            "c2c4",
+            "g7g6"
+          ],
+          "white": true,
+          "seed": 42
+        },
+        {
+          "game_id": "2",
+          "pair_id": 1,
+          "eco": "E60",
+          "opening": "King's Indian Defense",
+          "opening_moves": [
+            "d2d4",
+            "g8f6",
+            "c2c4",
+            "g7g6"
+          ],
+          "white": false,
+          "seed": 43
+        },
+        {
+          "game_id": "3",
+          "pair_id": 2,
+          "eco": "B00",
+          "opening": "Uncommon King's Pawn Opening",
+          "opening_moves": [
+            "e2e4",
+            "b8c6"
+          ],
+          "white": true,
+          "seed": 44
+        },
+        {
+          "game_id": "4",
+          "pair_id": 2,
+          "eco": "B00",
+          "opening": "Uncommon King's Pawn Opening",
+          "opening_moves": [
+            "e2e4",
+            "b8c6"
+          ],
+          "white": false,
+          "seed": 45
+        },
+        {
+          "game_id": "5",
+          "pair_id": 3,
+          "eco": "A00",
+          "opening": "Polish Opening (Sokolsky)",
+          "opening_moves": [
+            "b2b4"
+          ],
+          "white": true,
+          "seed": 46
+        },
+        {
+          "game_id": "6",
+          "pair_id": 3,
+          "eco": "A00",
+          "opening": "Polish Opening (Sokolsky)",
+          "opening_moves": [
+            "b2b4"
+          ],
+          "white": false,
+          "seed": 47
+        },
+        {
+          "game_id": "7",
+          "pair_id": 4,
+          "eco": "C40",
+          "opening": "King's Knight Opening",
+          "opening_moves": [
+            "e2e4",
+            "e7e5",
+            "g1f3"
+          ],
+          "white": true,
+          "seed": 48
+        },
+        {
+          "game_id": "8",
+          "pair_id": 4,
+          "eco": "C40",
+          "opening": "King's Knight Opening",
+          "opening_moves": [
+            "e2e4",
+            "e7e5",
+            "g1f3"
+          ],
+          "white": false,
+          "seed": 49
+        },
+        {
+          "game_id": "9",
+          "pair_id": 5,
+          "eco": "C20",
+          "opening": "King's Pawn Game",
+          "opening_moves": [
+            "e2e4",
+            "e7e5"
+          ],
+          "white": true,
+          "seed": 50
+        },
+        {
+          "game_id": "10",
+          "pair_id": 5,
+          "eco": "C20",
+          "opening": "King's Pawn Game",
+          "opening_moves": [
+            "e2e4",
+            "e7e5"
+          ],
+          "white": false,
+          "seed": 51
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-09-30T01:08:05.699059+00:00",
+      "reason": "User explicitly requested all three remaining GPT models concurrently.",
+      "previous_codex_concurrency": 1,
+      "new_codex_concurrency": 3
+    }
+  ],
+  "source_data_sha256": {
+    "manifest.json": "bffff406b572c6439fdb266e31a17862a226b88ec2381ee65f6526b4cfaa18a6",
+    "games.jsonl": "493cda94e99854a5d12f9be7d539a2fa933d3a63c496ec3b7fa5d325a64ba319",
+    "requests.jsonl": "cb828fb515617f83e23166d84447482fcc98bb917b7aa98b733a551d2e9ddcf3",
+    "plies.jsonl": "404017b91b2d888d8397d9af796a3b79709946acd58825d6426650b29be4511d",
+    "analysis.jsonl": "8188ace8379835640af2f7e6fc8a84708492ea6be8b9abccbbc511f521bd279a"
+  }
+}

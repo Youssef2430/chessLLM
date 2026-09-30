@@ -1,0 +1,103 @@
+{
+  "method": "Observed outcome proportions multiplied by ten; illustrative arithmetic, not a fitted forecast. Only models with two completed outcomes are included.",
+  "caution": "Projections are scaled observed rates, not played games or reliable predictions. One opening pair is too small to establish a model ranking; future outcomes may differ substantially.",
+  "models": [
+    {
+      "model": "gpt-6-astra",
+      "observed": {
+        "games": 2,
+        "wins": 2,
+        "draws": 0,
+        "losses": 0
+      },
+      "projected_games": 10,
+      "projected_outcomes": {
+        "wins": 10.0,
+        "draws": 0.0,
+        "losses": 0.0
+      }
+    },
+    {
+      "model": "gpt-6-sol",
+      "observed": {
+        "games": 1,
+        "wins": 0,
+        "draws": 0,
+        "losses": 1
+      },
+      "projected_games": 10,
+      "projected_outcomes": null
+    },
+    {
+      "model": "gpt-6-luna",
+      "observed": {
+        "games": 2,
+        "wins": 0,
+        "draws": 0,
+        "losses": 2
+      },
+      "projected_games": 10,
+      "projected_outcomes": {
+        "wins": 0.0,
+        "draws": 0.0,
+        "losses": 10.0
+      }
+    },
+    {
+      "model": "claude-opus-5-5",
+      "observed": {
+        "games": 2,
+        "wins": 1,
+        "draws": 0,
+        "losses": 1
+      },
+      "projected_games": 10,
+      "projected_outcomes": {
+        "wins": 5.0,
+        "draws": 0.0,
+        "losses": 5.0
+      }
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "observed": {
+        "games": 2,
+        "wins": 1,
+        "draws": 0,
+        "losses": 1
+      },
+      "projected_games": 10,
+      "projected_outcomes": {
+        "wins": 5.0,
+        "draws": 0.0,
+        "losses": 5.0
+      }
+    },
+    {
+      "model": "gemini-3.1-pro",
+      "observed": {
+        "games": 0,
+        "wins": 0,
+        "draws": 0,
+        "losses": 0
+      },
+      "projected_games": 10,
+      "projected_outcomes": null
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "observed": {
+        "games": 2,
+        "wins": 1,
+        "draws": 0,
+        "losses": 1
+      },
+      "projected_games": 10,
+      "projected_outcomes": {
+        "wins": 5.0,
+        "draws": 0.0,
+        "losses": 5.0
+      }
+    }
+  ]
+}

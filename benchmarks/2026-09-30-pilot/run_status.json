@@ -1,0 +1,37 @@
+{
+  "status": "incomplete",
+  "started_at": "2026-09-30T01:08:13.919258+00:00",
+  "updated_at": "2026-09-30T04:39:34.053775+00:00",
+  "models": {
+    "gpt-6-astra": {
+      "status": "finished",
+      "games": 2
+    },
+    "gpt-6-sol": {
+      "status": "finished",
+      "games": 2
+    },
+    "gpt-6-luna": {
+      "status": "finished",
+      "games": 2
+    },
+    "claude-opus-5-5": {
+      "status": "finished",
+      "games": 2
+    },
+    "claude-sonnet-5-5": {
+      "status": "finished",
+      "games": 2
+    },
+    "gemini-3.1-pro": {
+      "status": "blocked",
+      "games": 0,
+      "game_id": "1",
+      "reason": "Tool use invalidated the unaided benchmark"
+    },
+    "gemini-3.8-flash": {
+      "status": "finished",
+      "games": 2
+    }
+  }
+}

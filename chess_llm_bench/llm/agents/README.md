@@ -1,4 +1,10 @@
-# Chess Agent System
+# Experimental chess agents
+
+These direct agent classes are legacy research APIs. The current subscription
+benchmark disables external tools and does not use them. The protocol 2 CLI
+`--use-agent` option uses the bounded single-request wrapper in
+`llm_agent_provider.py`. The strategies below are not validated measures of
+playing strength. See [current architecture](../../../docs/architecture.md).
 
 ## Overview
 

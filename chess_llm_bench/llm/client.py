@@ -1,480 +1,270 @@
-"""
-LLM client module for chess move generation.
-
-This module provides a unified interface for generating chess moves using various
-Large Language Model providers, with robust parsing, validation, and error handling.
-"""
+"""Async providers, auditable usage, and strict chess move validation."""
 
 from __future__ import annotations
 
 import asyncio
-import logging
+import os
 import random
 import re
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-import os
 
 import chess
 
 from ..core.models import BotSpec
-from ..core.budget import record_llm_usage
+from ..core.budget import get_budget_tracker
 
-# Try to import agent providers
-try:
-    from .agents import (
-        LLMAgentProvider,
-        create_agent_provider,
-        ThinkingStrategy
-    )
-    AGENTS_AVAILABLE = True
-except ImportError:
-    AGENTS_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
-
-# Regex for extracting UCI moves from LLM responses
 MOVE_REGEX = re.compile(r"\b([a-h][1-8][a-h][1-8][qrbn]?)\b", re.IGNORECASE)
+AGENTS_AVAILABLE = True  # Agent imports are lazy to avoid the former circular import.
 
 
-class LLMProviderError(Exception):
-    """Custom exception for LLM provider errors."""
-    pass
+class LLMProviderError(RuntimeError):
+    """Infrastructure failure; never substitute a chess move."""
+
+
+class InvalidMoveError(ValueError):
+    """A model response violated the move contract (a game forfeit)."""
+
+
+@dataclass
+class Completion:
+    text: str
+    input_tokens: Optional[int]
+    output_tokens: Optional[int]  # Includes billed reasoning/thinking tokens.
 
 
 class BaseLLMProvider(ABC):
-    """Abstract base class for LLM providers."""
-
     def __init__(self, spec: BotSpec):
-        """Initialize the provider with bot specification."""
         self.spec = spec
-        self.random = random.Random()
+        self.random = random.Random(42)
+        self.max_output_tokens = 2048
+        self.reasoning_effort = "low"
+        self.usage_context = {}
 
     @abstractmethod
     async def generate_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        move_history: list = []
+        self, board, temperature=0.0, timeout_s=60.0, move_history=None
     ) -> str:
-        """
-        Generate a move response from the LLM.
-
-        Args:
-            board: Current chess position
-            temperature: Sampling temperature
-            timeout_s: Timeout in seconds
-            move_history: List of previous moves in the game
-
-        Returns:
-            Raw text response from the LLM
-
-        Raises:
-            LLMProviderError: If move generation fails
-        """
         pass
 
-    def _create_chess_prompt(self, board: chess.Board, move_history: list = None) -> str:
-        """Create a standardized chess prompt for the LLM."""
-        legal_moves = " ".join(move.uci() for move in board.legal_moves)
-        color = "White" if board.turn == chess.WHITE else "Black"
-
-        # Create a comprehensive but concise prompt
-        prompt = (
-            "You are a strong chess player. Given the position and legal moves, "
-            "choose the best move and respond with ONLY the UCI notation (like e2e4 or a7a8q).\n\n"
-        )
-
-        # Add move history if available
-        if move_history and len(move_history) > 0:
-            # Format move history in standard algebraic notation style
-            move_pairs = []
-
-            for i in range(0, len(move_history), 2):
-                move_num = (i // 2) + 1
-                white_move = move_history[i]
-                black_move = move_history[i+1] if i+1 < len(move_history) else ""
-
-                if black_move:
-                    move_pairs.append(f"{move_num}. {white_move} {black_move}")
-                else:
-                    move_pairs.append(f"{move_num}. {white_move}")
-
-            # Join moves and add to prompt
-            move_history_text = "\n".join(move_pairs)
-            prompt += (
-                f"Game history ({len(move_history)} moves so far):\n"
-                f"{move_history_text}\n\n"
-            )
-            logger.debug(f"Added {len(move_history)} moves to prompt history")
-
-        # Add current position information
-        prompt += (
+    def _create_chess_prompt(self, board, move_history=None) -> str:
+        # The board's stack is authoritative, including all supplied opening plies.
+        history = " ".join(move.uci() for move in board.move_stack)
+        return (
+            "Choose the best chess move. Reply with exactly one legal UCI move, "
+            "such as e2e4 or a7a8q, and no other text.\n"
             f"Position (FEN): {board.fen()}\n"
-            f"Side to move: {color}\n"
-            f"Legal moves (UCI): {legal_moves}\n\n"
-            "Your response must be exactly one legal UCI move from the list above, nothing else."
+            f"Side to move: {'White' if board.turn else 'Black'}\n"
+            f"History (UCI, from the starting position): {history}\n"
+            f"Legal moves (UCI): {' '.join(move.uci() for move in board.legal_moves)}"
         )
 
-        return prompt
-
-    def _fallback_random_move(self, board: chess.Board) -> str:
-        """Generate a random legal move as fallback."""
-        legal_moves = list(board.legal_moves)
-        if not legal_moves:
+    def _fallback_random_move(self, board) -> str:
+        """Used only by the explicit random baseline."""
+        legal = list(board.legal_moves)
+        if not legal:
             raise LLMProviderError("No legal moves available")
-        return legal_moves[self.random.randrange(len(legal_moves))].uci()
+        return self.random.choice(legal).uci()
+
+    async def close(self):
+        pass
 
 
-class OpenAIProvider(BaseLLMProvider):
-    """OpenAI GPT provider for chess move generation."""
-
-    def __init__(self, spec: BotSpec):
-        super().__init__(spec)
-
-        # Import OpenAI only when needed
-        try:
-            from openai import OpenAI
-            self._openai = OpenAI
-        except ImportError:
-            raise LLMProviderError(
-                "OpenAI package not installed. Install with: pip install openai"
-            )
-
-        # Initialize client
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise LLMProviderError(
-                "OPENAI_API_KEY environment variable is required for OpenAI provider"
-            )
-
-        self.client = self._openai(api_key=api_key)
-
-        # Validate model
-        if not spec.model:
-            raise LLMProviderError("Model name is required for OpenAI provider")
-
+class APIProvider(BaseLLMProvider):
     async def generate_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        move_history: list = []
-    ) -> str:
-        """Generate move using OpenAI GPT models."""
-        prompt = self._create_chess_prompt(board, move_history)
+        self, board, temperature=0.0, timeout_s=60.0, move_history=None
+    ):
+        return await self.complete(
+            self._create_chess_prompt(board, move_history), temperature, timeout_s
+        )
 
+    async def complete(self, prompt: str, temperature: float, timeout_s: float) -> str:
+        tracker = get_budget_tracker()
+        input_allowance = len(prompt.encode("utf-8")) + 256
+        reservation = tracker.reserve(
+            self.spec.provider, self.spec.model, input_allowance, self.max_output_tokens
+        )
         try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(self._call_openai, prompt, temperature),
-                timeout=timeout_s
+            try:
+                response = await asyncio.wait_for(
+                    self._request(prompt, temperature, timeout_s), timeout_s
+                )
+            except BaseException as exc:
+                # A timeout/cancellation may still be billed. Preserve a conservative
+                # charge instead of claiming the request was free or retrying it.
+                tracker.record_usage(
+                    self.spec.provider,
+                    self.spec.model,
+                    self.spec.name,
+                    prompt,
+                    actual_input_tokens=input_allowance,
+                    actual_output_tokens=self.max_output_tokens,
+                    success=False,
+                    error_message=type(exc).__name__,
+                    usage_source="uncertain_upper_estimate",
+                    **self.usage_context,
+                )
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                if not isinstance(exc, Exception):
+                    raise
+                raise LLMProviderError(
+                    f"{self.spec.provider} request failed ({type(exc).__name__})"
+                ) from exc
+            reported = (
+                response.input_tokens is not None and response.output_tokens is not None
             )
-
-            # Record usage for budget tracking
-            record_llm_usage(
-                provider="openai",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response=response,
-                success=True
-            )
-
-            return response
-
-        except asyncio.TimeoutError:
-            # Record failed usage
-            record_llm_usage(
-                provider="openai",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response="",
-                success=False,
-                error_message=f"Request timed out after {timeout_s}s"
-            )
-            raise LLMProviderError(f"OpenAI request timed out after {timeout_s}s")
-        except Exception as e:
-            # Record failed usage
-            record_llm_usage(
-                provider="openai",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response="",
-                success=False,
-                error_message=str(e)
-            )
-            raise LLMProviderError(f"OpenAI API error: {e}")
-
-    def _call_openai(self, prompt: str, temperature: float) -> str:
-        """Make synchronous OpenAI API call."""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.spec.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                max_tokens=16,  # Short response expected
-                n=1
-            )
-
-            content = response.choices[0].message.content
-            if not content:
-                raise LLMProviderError("OpenAI returned empty response")
-
-            return content.strip()
-
-        except Exception as e:
-            raise LLMProviderError(f"OpenAI completion failed: {e}")
-
-
-class AnthropicProvider(BaseLLMProvider):
-    """Anthropic Claude provider for chess move generation."""
-
-    def __init__(self, spec: BotSpec):
-        super().__init__(spec)
-
-        # Import Anthropic only when needed
-        try:
-            import anthropic
-            self._anthropic = anthropic
-        except ImportError:
-            raise LLMProviderError(
-                "Anthropic package not installed. Install with: pip install anthropic"
-            )
-
-        # Initialize client
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise LLMProviderError(
-                "ANTHROPIC_API_KEY environment variable is required for Anthropic provider"
-            )
-
-        self.client = self._anthropic.Anthropic(api_key=api_key)
-
-        # Set default model if not specified
-        if not spec.model:
-            spec.model = "claude-3-haiku-20240307"
-
-    async def generate_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        move_history: list = []
-    ) -> str:
-        """Generate move using Anthropic Claude models."""
-        prompt = self._create_chess_prompt(board, move_history)
-
-        try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(self._call_anthropic, prompt, temperature),
-                timeout=timeout_s
-            )
-
-            # Record usage for budget tracking
-            record_llm_usage(
-                provider="anthropic",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response=response,
-                success=True
-            )
-
-            return response
-
-        except asyncio.TimeoutError:
-            # Record failed usage
-            record_llm_usage(
-                provider="anthropic",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response="",
-                success=False,
-                error_message=f"Request timed out after {timeout_s}s"
-            )
-            raise LLMProviderError(f"Anthropic request timed out after {timeout_s}s")
-        except Exception as e:
-            # Record failed usage
-            record_llm_usage(
-                provider="anthropic",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response="",
-                success=False,
-                error_message=str(e)
-            )
-            raise LLMProviderError(f"Anthropic API error: {e}")
-
-    def _call_anthropic(self, prompt: str, temperature: float) -> str:
-        """Make synchronous Anthropic API call."""
-        try:
-            response = self.client.messages.create(
-                model=self.spec.model,
-                max_tokens=16,
-                temperature=temperature,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            if not response.content:
-                raise LLMProviderError("Anthropic returned empty response")
-
-            # Extract text content
-            text_content = ""
-            for content_block in response.content:
-                if hasattr(content_block, 'text'):
-                    text_content += content_block.text
-
-            if not text_content:
-                raise LLMProviderError("No text content in Anthropic response")
-
-            return text_content.strip()
-
-        except Exception as e:
-            raise LLMProviderError(f"Anthropic completion failed: {e}")
-
-
-class GeminiProvider(BaseLLMProvider):
-    """Google Gemini provider for chess move generation."""
-
-    def __init__(self, spec: BotSpec):
-        super().__init__(spec)
-
-        # Import Google Generative AI only when needed
-        try:
-            import google.generativeai as genai
-            self._genai = genai
-        except ImportError:
-            raise LLMProviderError(
-                "Google Generative AI package not installed. Install with: pip install google-generativeai"
-            )
-
-        # Initialize client
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise LLMProviderError(
-                "GEMINI_API_KEY environment variable is required for Gemini provider"
-            )
-
-        self._genai.configure(api_key=api_key)
-
-        # Set default model if not specified
-        if not spec.model:
-            spec.model = "gemini-1.5-flash"
-
-        # Create the model
-        try:
-            self.model = self._genai.GenerativeModel(spec.model)
-        except Exception as e:
-            raise LLMProviderError(f"Failed to create Gemini model {spec.model}: {e}")
-
-    async def generate_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        move_history: list = []
-    ) -> str:
-        """Generate move using Google Gemini models."""
-        prompt = self._create_chess_prompt(board, move_history)
-
-        try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(self._call_gemini, prompt, temperature),
-                timeout=timeout_s
-            )
-
-            # Record usage for budget tracking
-            record_llm_usage(
-                provider="gemini",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response=response,
-                success=True
-            )
-
-            return response
-
-        except asyncio.TimeoutError:
-            # Record failed usage
-            record_llm_usage(
-                provider="gemini",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response="",
-                success=False,
-                error_message=f"Request timed out after {timeout_s}s"
-            )
-            raise LLMProviderError(f"Gemini request timed out after {timeout_s}s")
-        except Exception as e:
-            # Record failed usage
-            record_llm_usage(
-                provider="gemini",
-                model=self.spec.model,
-                bot_name=self.spec.name,
-                prompt=prompt,
-                response="",
-                success=False,
-                error_message=str(e)
-            )
-            raise LLMProviderError(f"Gemini API error: {e}")
-
-    def _call_gemini(self, prompt: str, temperature: float) -> str:
-        """Make synchronous Gemini API call."""
-        try:
-            generation_config = {
-                "temperature": temperature,
-                "max_output_tokens": 16,
-            }
-
-            response = self.model.generate_content(
+            tracker.record_usage(
+                self.spec.provider,
+                self.spec.model,
+                self.spec.name,
                 prompt,
-                generation_config=generation_config
+                response.text,
+                actual_input_tokens=(
+                    response.input_tokens if reported else input_allowance
+                ),
+                actual_output_tokens=(
+                    response.output_tokens if reported else self.max_output_tokens
+                ),
+                usage_source="reported" if reported else "uncertain_upper_estimate",
+                **self.usage_context,
             )
-
-            if not response.text:
-                raise LLMProviderError("Gemini returned empty response")
-
+            # Empty/truncated responses are still billed and count as invalid output.
             return response.text.strip()
+        finally:
+            tracker.release(reservation)
 
-        except Exception as e:
-            raise LLMProviderError(f"Gemini completion failed: {e}")
+
+class OpenAIProvider(APIProvider):
+    def __init__(self, spec):
+        super().__init__(spec)
+        from openai import AsyncOpenAI
+
+        if not os.getenv("OPENAI_API_KEY"):
+            raise LLMProviderError("OPENAI_API_KEY is required")
+        self.client = AsyncOpenAI(max_retries=0)
+
+    async def _request(self, prompt, temperature, timeout_s):
+        kwargs = dict(
+            model=self.spec.model,
+            input=prompt,
+            max_output_tokens=self.max_output_tokens,
+            timeout=timeout_s,
+            store=False,
+        )
+        if self.spec.model.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4")):
+            kwargs["reasoning"] = {"effort": self.reasoning_effort}
+        else:
+            kwargs["temperature"] = temperature
+        response = await self.client.responses.create(**kwargs)
+        usage = response.usage
+        return Completion(
+            response.output_text or "",
+            getattr(usage, "input_tokens", None),
+            getattr(usage, "output_tokens", None),
+        )
+
+    async def close(self):
+        await self.client.close()
+
+
+class AnthropicProvider(APIProvider):
+    def __init__(self, spec):
+        super().__init__(spec)
+        from anthropic import AsyncAnthropic
+
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise LLMProviderError("ANTHROPIC_API_KEY is required")
+        self.client = AsyncAnthropic(max_retries=0)
+
+    async def _request(self, prompt, temperature, timeout_s):
+        kwargs = dict(
+            model=self.spec.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self.max_output_tokens,
+            timeout=timeout_s,
+        )
+        if self.spec.model.startswith(
+            ("claude-sonnet-5", "claude-opus-5", "claude-fable-5")
+        ):
+            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["output_config"] = {"effort": self.reasoning_effort}
+        else:
+            kwargs["temperature"] = temperature
+        response = await self.client.messages.create(**kwargs)
+        usage = response.usage
+        inputs = getattr(usage, "input_tokens", None)
+        if inputs is not None:
+            inputs += getattr(usage, "cache_read_input_tokens", 0) or 0
+            inputs += getattr(usage, "cache_creation_input_tokens", 0) or 0
+        return Completion(
+            "".join(block.text for block in response.content if block.type == "text"),
+            inputs,
+            getattr(usage, "output_tokens", None),
+        )
+
+    async def close(self):
+        await self.client.close()
+
+
+class GeminiProvider(APIProvider):
+    def __init__(self, spec):
+        super().__init__(spec)
+        from google import genai
+        from google.genai import types
+
+        key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not key:
+            raise LLMProviderError("GEMINI_API_KEY or GOOGLE_API_KEY is required")
+        self.client = genai.Client(
+            api_key=key,
+            http_options=types.HttpOptions(
+                retry_options=types.HttpRetryOptions(attempts=1)
+            ),
+        )
+
+    async def _request(self, prompt, temperature, timeout_s):
+        from google.genai import types
+
+        config = dict(max_output_tokens=self.max_output_tokens)
+        if self.spec.model.startswith("gemini-3"):
+            config["thinking_config"] = types.ThinkingConfig(
+                thinking_level=self.reasoning_effort
+            )
+        else:
+            config["temperature"] = temperature
+        response = await self.client.aio.models.generate_content(
+            model=self.spec.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(**config),
+        )
+        usage = response.usage_metadata
+        output = getattr(usage, "candidates_token_count", None)
+        if output is not None:
+            output += getattr(usage, "thoughts_token_count", 0) or 0
+        text = "".join(
+            part.text
+            for candidate in (response.candidates or [])
+            for part in (candidate.content.parts if candidate.content else [])
+            if part.text and not part.thought
+        )
+        return Completion(text, getattr(usage, "prompt_token_count", None), output)
+
+    async def close(self):
+        await self.client.aio.aclose()
+        self.client.close()
 
 
 class RandomProvider(BaseLLMProvider):
-    """Random move provider (baseline)."""
-
-    def __init__(self, spec: BotSpec):
-        """Initialize the random move provider."""
-        super().__init__(spec)
-
     async def generate_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        move_history: list = []
-    ) -> str:
-        """Generate a random valid move."""
+        self, board, temperature=0.0, timeout_s=60.0, move_history=None
+    ):
         return self._fallback_random_move(board)
 
 
 class LLMClient:
-    """
-    Main LLM client that manages different providers and handles move parsing.
-
-    This class provides a unified interface for chess move generation across
-    different LLM providers with robust error handling and move validation.
-    """
-
-    # Registry of available providers
     PROVIDERS: Dict[str, type[BaseLLMProvider]] = {
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
@@ -482,324 +272,103 @@ class LLMClient:
         "random": RandomProvider,
     }
 
-    def __init__(self, spec: BotSpec, use_agent: bool = False,
-                 agent_strategy: str = "balanced", verbose_agent: bool = False):
-        """
-        Initialize LLM client with the specified bot configuration.
-
-        Args:
-            spec: Bot specification including provider, model, and name
-            use_agent: Whether to use agent-based reasoning instead of prompting
-            agent_strategy: Strategy for agent reasoning ("fast", "balanced", "deep", "adaptive")
-            verbose_agent: Whether to output detailed agent reasoning
-        """
+    def __init__(
+        self,
+        spec,
+        use_agent=False,
+        agent_strategy="balanced",
+        verbose_agent=False,
+        max_output_tokens=2048,
+        reasoning_effort="low",
+    ):
         self.spec = spec
-        self.use_agent = use_agent
+        self.use_agent = use_agent and spec.provider != "random"
         self.agent_strategy = agent_strategy
         self.verbose_agent = verbose_agent
+        if self.use_agent:
+            from .agents.llm_agent_provider import create_agent_provider
 
-        # Create provider (agent-based or traditional)
-        if use_agent and AGENTS_AVAILABLE and spec.provider.lower() != "random":
-            # Use agent-based provider for LLMs
-            try:
-                self.provider = self._create_agent_provider(
-                    spec,
-                    temperature=0.0
-                )
-                logger.info(f"Initialized agent-based LLM client: {spec} (strategy: {agent_strategy})")
-            except Exception as e:
-                logger.warning(f"Failed to create agent provider, falling back to traditional: {e}")
-                self.use_agent = False
+            self.provider = create_agent_provider(
+                spec, strategy=agent_strategy, verbose=verbose_agent
+            )
         else:
-            # Agents not available or not requested, use traditional provider
-            self.use_agent = False
-
-        if not self.use_agent:
-            # Use traditional prompting-based provider
-            provider_class = self.PROVIDERS.get(spec.provider.lower())
-            if not provider_class:
-                available = ", ".join(self.PROVIDERS.keys())
-                raise LLMProviderError(
-                    f"Unsupported provider '{spec.provider}'. Available: {available}"
-                )
-
-            try:
-                self.provider = provider_class(spec)
-                logger.info(f"Initialized traditional LLM client: {spec}")
-            except Exception as e:
-                raise LLMProviderError(f"Failed to initialize provider {spec.provider}: {e}")
-
-        # Initialize move statistics tracking
-        self._total_move_time = 0.0
-        self._illegal_move_attempts = 0
-        self._move_count = 0
-
-        # Initialize move history tracking
-        self._move_history = []
+            provider = self.PROVIDERS.get(spec.provider)
+            if provider is None:
+                raise LLMProviderError(f"Unsupported provider {spec.provider}")
+            self.provider = provider(spec)
+        self.provider.max_output_tokens = max_output_tokens
+        self.provider.reasoning_effort = reasoning_effort
+        self.reset_move_stats()
 
     async def pick_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        opponent_move: Optional[str] = None
-    ) -> chess.Move:
-        """
-        Generate a legal chess move for the given position.
-
-        Args:
-            board: Current chess position
-            temperature: Sampling temperature (0.0 = deterministic)
-            timeout_s: Timeout for move generation
-
-        Returns:
-            A legal chess move
-
-        Raises:
-            LLMProviderError: If move generation fails completely
-        """
-        if board.is_game_over():
+        self, board, temperature=0.0, timeout_s=60.0, opponent_move=None
+    ):
+        if board.is_game_over(claim_draw=True):
             raise LLMProviderError("Cannot generate move for finished game")
-
-        # Start timing
-        start_time = time.time()
-        illegal_attempts = 0
-
-        # If opponent just moved, add it to history
-        if opponent_move:
-            self._move_history.append(opponent_move)
-            logger.debug(f"Added opponent move to history: {opponent_move} (moves: {len(self._move_history)})")
-
+        start = time.monotonic()
+        self._move_history = [move.uci() for move in board.move_stack]
         try:
-            # Generate move from LLM with complete game history
-            logger.debug(f"Generating move with history of {len(self._move_history)} previous moves")
-            response = await self.provider.generate_move(board, temperature, timeout_s, self._move_history)
-            logger.debug(f"LLM response: {response}")
-
-            # Parse and validate move
+            response = await self.provider.generate_move(
+                board, temperature, timeout_s, self._move_history
+            )
             move = self._parse_move(response, board)
-
-            if move and move in board.legal_moves:
-                logger.debug(f"Selected move: {move.uci()}")
-                # Add the selected move to game history
-                move_uci = move.uci()
-                self._move_history.append(move_uci)
-                logger.debug(f"Added LLM move to history: {move_uci} (moves: {len(self._move_history)})")
-                self._record_move_stats(start_time, illegal_attempts)
-                return move
-            elif move:
-                # Move was parsed but is illegal
-                illegal_attempts += 1
-                logger.debug(f"Illegal move attempted: {move.uci()}")
-
-            # If parsing failed, try SAN notation as fallback
-            # Try SAN notation as fallback
-            move = self._try_san_parsing(response, board)
-            if move and move in board.legal_moves:
-                logger.debug(f"Parsed SAN move: {move.uci()}")
-                # Add the move to history
-                move_uci = move.uci()
-                self._move_history.append(move_uci)
-                logger.debug(f"Added LLM move (SAN parsed) to history: {move_uci} (moves: {len(self._move_history)})")
-                self._record_move_stats(start_time, illegal_attempts)
-                return move
-            elif move:
-                # SAN move was parsed but is illegal
-                illegal_attempts += 1
-                logger.debug(f"Illegal SAN move attempted: {move.uci()}")
-            else:
-                # Both parsing attempts failed
-                illegal_attempts += 1
-                logger.debug("Move parsing failed completely")
-
-        except Exception as e:
-            logger.warning(f"LLM move generation failed: {e}")
-            illegal_attempts += 1
-
-        # Final fallback to random move
-        logger.info("Falling back to random move")
-        illegal_attempts += 1  # Count using a random move as an illegal attempt
-        fallback_move = self.provider._fallback_random_move(board)
-
-        # Add the fallback move to history
-        fallback_uci = fallback_move.uci()
-        self._move_history.append(fallback_uci)
-        logger.debug(f"Added fallback move to history: {fallback_uci} (moves: {len(self._move_history)})")
-
-        # Record stats with extra illegal attempt for random move
-        self._record_move_stats(start_time, illegal_attempts)
-        return fallback_move
-
-    def _record_move_stats(self, start_time: float, illegal_attempts: int) -> None:
-        """Record timing and illegal move statistics for this move."""
-        move_time = time.time() - start_time
-        self._total_move_time += move_time
-        self._illegal_move_attempts += illegal_attempts
-        self._move_count += 1
-        logger.debug(f"Move stats: {move_time:.3f}s, {illegal_attempts} illegal attempts")
+            if move is None:
+                self._illegal_move_attempts += 1
+                raise InvalidMoveError("Expected exactly one legal UCI move")
+            return move
+        finally:
+            self._total_move_time += time.monotonic() - start
+            self._move_count += 1
 
     def get_move_stats(self) -> Tuple[float, int, float]:
-        """
-        Get current move statistics.
+        return (
+            self._total_move_time,
+            self._illegal_move_attempts,
+            self._total_move_time / self._move_count if self._move_count else 0.0,
+        )
 
-        Returns:
-            Tuple of (total_time, illegal_attempts, average_time_per_move)
-        """
-        avg_time = self._total_move_time / self._move_count if self._move_count > 0 else 0.0
-        return (self._total_move_time, self._illegal_move_attempts, avg_time)
-
-    def reset_move_stats(self) -> None:
-        """Reset move statistics for a new game."""
+    def reset_move_stats(self):
         self._total_move_time = 0.0
         self._illegal_move_attempts = 0
         self._move_count = 0
-        self._move_history = []  # Reset move history for new game
+        self._move_history = []
 
-    def _parse_move(self, response: str, board: chess.Board) -> Optional[chess.Move]:
-        """
-        Parse UCI move from LLM response text.
-
-        Args:
-            response: Raw LLM response
-            board: Current chess position
-
-        Returns:
-            Parsed move if successful, None otherwise
-        """
-        # Extract UCI move with regex
-        match = MOVE_REGEX.search(response)
+    def _parse_move(self, response, board) -> Optional[chess.Move]:
+        match = MOVE_REGEX.fullmatch(response.strip())
         if not match:
             return None
-
-        uci_str = match.group(1).lower()
-
         try:
-            move = chess.Move.from_uci(uci_str)
-
-            # Handle promotion notation variations
-            if move not in board.legal_moves and len(uci_str) == 5:
-                # Try without promotion piece (auto-promote to queen)
-                try:
-                    move = chess.Move.from_uci(uci_str[:4] + 'q')
-                except:
-                    pass
-
+            move = chess.Move.from_uci(match.group(1).lower())
             return move if move in board.legal_moves else None
-
-        except (ValueError, chess.InvalidMoveError):
+        except ValueError:
             return None
 
-    def _try_san_parsing(self, response: str, board: chess.Board) -> Optional[chess.Move]:
-        """
-        Attempt to parse Standard Algebraic Notation as fallback.
-
-        Args:
-            response: Raw LLM response
-            board: Current chess position
-
-        Returns:
-            Parsed move if successful, None otherwise
-        """
-        # Clean up response for SAN parsing
-        cleaned = response.strip().split()[0]  # Take first word
-
-        # Try common SAN variations
-        san_candidates = [
-            cleaned,
-            cleaned.rstrip('+#'),  # Remove check/mate symbols
-            cleaned.replace('x', ''),  # Remove capture notation
-        ]
-
-        for san in san_candidates:
-            try:
-                move = board.parse_san(san)
-                if move in board.legal_moves:
-                    return move
-            except (ValueError, chess.InvalidMoveError, chess.IllegalMoveError):
-                continue
-
-        return None
-
-    def _create_agent_provider(self, spec: BotSpec, temperature: float) -> BaseLLMProvider:
-        """Create an agent-based provider instance."""
-        if not AGENTS_AVAILABLE:
-            raise ImportError("Agent providers not available")
-
-        return create_agent_provider(
-            spec=spec,
-            strategy=self.agent_strategy,
-            verbose=self.verbose_agent,
-            use_tools=True,
-            temperature=temperature
-        )
+    async def close(self):
+        await self.provider.close()
 
     @classmethod
-    def get_available_providers(cls) -> List[str]:
-        """Get list of available LLM providers."""
-        return list(cls.PROVIDERS.keys())
+    def get_available_providers(cls):
+        return list(cls.PROVIDERS)
 
     @classmethod
-    def register_provider(cls, name: str, provider_class: type[BaseLLMProvider]) -> None:
-        """
-        Register a custom LLM provider.
-
-        Args:
-            name: Provider name (lowercase)
-            provider_class: Provider implementation class
-        """
+    def register_provider(cls, name, provider_class):
         cls.PROVIDERS[name.lower()] = provider_class
-        logger.info(f"Registered custom provider: {name}")
 
 
 def parse_bot_spec(spec_string: str) -> List[BotSpec]:
-    """
-    Parse bot specification strings into BotSpec objects.
-
-    Format: "provider:model:name" or "provider::name" (empty model)
-    Can prefix with "agent:" to use agent-based reasoning (e.g., "agent:openai:gpt-4:MyBot")
-    Multiple bots can be specified separated by commas.
-
-    Args:
-        spec_string: Bot specification string(s)
-        spec_string: Comma-separated bot specifications
-
-    Returns:
-        List of BotSpec objects
-
-    Raises:
-        ValueError: If specification format is invalid
-    """
-    bots: List[BotSpec] = []
-
-    if not spec_string.strip():
-        return bots
-
-    for raw_spec in [s.strip() for s in spec_string.split(",") if s.strip()]:
-        parts = raw_spec.split(":")
-
-        if len(parts) == 1:
-            # Single part: treat as provider name
-            provider, model, name = parts[0], "", parts[0]
-        elif len(parts) == 2:
-            # Two parts: provider:model or provider:name
-            provider, second_part = parts
-            if second_part:
-                model, name = second_part, second_part
-            else:
-                model, name = "", provider
-        else:
-            # Three or more parts: provider:model:name (name can have colons)
-            provider, model, name = parts[0], parts[1], ":".join(parts[2:])
-
-        # Validate provider
-        if provider.lower() not in LLMClient.PROVIDERS:
-            available = ", ".join(LLMClient.PROVIDERS.keys())
-            raise ValueError(f"Unsupported provider '{provider}'. Available: {available}")
-
-        bots.append(BotSpec(
-            provider=provider.lower(),
-            model=model,
-            name=name
-        ))
-
+    bots = []
+    for raw in filter(None, (part.strip() for part in spec_string.split(","))):
+        parts = [part.strip() for part in raw.split(":", 2)]
+        provider = parts[0].lower()
+        model = parts[1] if len(parts) > 1 else ""
+        name = parts[2] if len(parts) > 2 else model or provider
+        if provider not in LLMClient.PROVIDERS:
+            raise ValueError(f"Unsupported provider '{provider}'")
+        if provider != "random" and not model:
+            raise ValueError(f"Model ID required for {provider}")
+        if not name or name in {".", ".."} or "/" in name or "\\" in name:
+            raise ValueError("Bot name must be a nonempty filename-safe name")
+        if any(bot.name == name for bot in bots):
+            raise ValueError(f"Duplicate bot name: {name}")
+        bots.append(BotSpec(provider, model, name))
     return bots

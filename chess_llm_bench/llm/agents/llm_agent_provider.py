@@ -22,7 +22,6 @@ from ...core.budget import record_llm_usage
 from .base_agent import ChessAgent, AgentDecision, AgentThought, ThinkingStrategy
 from .chess_tools import ChessAnalysisTools, MoveAnalysis, MoveCategory
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +40,7 @@ class LLMAgentProvider(BaseLLMProvider):
         verbose: bool = False,
         use_tools: bool = True,
         max_retries: int = 3,
-        temperature: float = 0.0
+        temperature: float = 0.0,
     ):
         """
         Initialize the LLM agent provider.
@@ -70,94 +69,37 @@ class LLMAgentProvider(BaseLLMProvider):
             strategy=strategy,
             verbose=verbose,
             use_tools=use_tools,
-            temperature=temperature
+            temperature=temperature,
         )
 
     async def generate_move(
-        self,
-        board: chess.Board,
-        temperature: float = 0.0,
-        timeout_s: float = 20.0,
-        move_history: list = []
+        self, board, temperature=0.0, timeout_s=60.0, move_history=None
     ) -> str:
+        """One tool-assisted decision request per move, with no hidden fallback.
+
+        Local tools provide material and positional observations, not a selected
+        move. The model must still choose among all legal moves. This protocol is
+        distinct from plain prompting and the old multi-call heuristic agent.
         """
-        Generate a move using the agent-based approach.
+        provider = self.agent.llm_client
+        provider.max_output_tokens = self.max_output_tokens
+        provider.reasoning_effort = self.reasoning_effort
+        provider.usage_context = self.usage_context
+        prompt = self._create_chess_prompt(board, move_history)
+        if self.use_tools:
+            tools = ChessAnalysisTools(board)
+            observations = {
+                "material": tools.evaluate_material(),
+                "position": tools.evaluate_position(),
+            }
+            prompt += "\nLocal heuristic observations (fallible): " + json.dumps(
+                observations
+            )
+            prompt += "\nChoose from ALL legal moves. Reply with only one UCI move."
+        return await provider.complete(prompt, temperature, timeout_s)
 
-        Args:
-            board: Current chess board
-            temperature: Temperature for generation (unused for agents)
-            timeout_s: Timeout in seconds
-            move_history: List of moves in the game
-
-        Returns:
-            Move in UCI format
-        """
-        start_time = time.time()
-
-        try:
-            # Use the agent to make a decision
-            decision = await self.agent.make_move(board)
-
-            # Extract UCI move
-            uci_move = decision.uci
-
-            # Validate the move
-            try:
-                move = chess.Move.from_uci(uci_move)
-                if move not in board.legal_moves:
-                    logger.warning(f"Agent suggested illegal move: {uci_move}")
-                    # Try to find the intended move
-                    for legal_move in board.legal_moves:
-                        if board.san(legal_move) == decision.san:
-                            uci_move = legal_move.uci()
-                            break
-                    else:
-                        # Fallback to random
-                        return self._fallback_random_move(board)
-            except:
-                logger.error(f"Invalid move format from agent: {uci_move}")
-                return self._fallback_random_move(board)
-
-            if self.verbose:
-                logger.info(f"Agent move: {uci_move} (confidence: {decision.confidence:.2f})")
-
-            # Record overall move generation (individual LLM calls are tracked separately)
-            # This helps with move counting and statistics
-            if self.provider != "random":
-                # Create a summary of the agent's reasoning for tracking
-                reasoning_summary = f"Agent decision: {decision.san} (confidence: {decision.confidence:.2f})"
-                if decision.reasoning:
-                    key_thoughts = [t.content for t in decision.reasoning if t.thought_type == "decision"]
-                    if key_thoughts:
-                        reasoning_summary += f"\nReasoning: {key_thoughts[0][:100]}"
-
-                record_llm_usage(
-                    provider=self.provider,
-                    model=self.model,
-                    bot_name=self.spec.name,
-                    prompt=f"Agent move generation for position: {board.fen()[:50]}...",
-                    response=reasoning_summary,
-                    success=True
-                )
-
-            return uci_move
-
-        except Exception as e:
-            logger.error(f"Agent error: {e}")
-
-            # Record failed move generation
-            if self.provider != "random":
-                record_llm_usage(
-                    provider=self.provider,
-                    model=self.model,
-                    bot_name=self.spec.name,
-                    prompt=f"Agent move generation for position: {board.fen()[:50]}...",
-                    response="",
-                    success=False,
-                    error_message=str(e)
-                )
-
-            return self._fallback_random_move(board)
+    async def close(self):
+        await self.agent.llm_client.close()
 
 
 class LLMChessAgent(ChessAgent):
@@ -171,14 +113,10 @@ class LLMChessAgent(ChessAgent):
         strategy: ThinkingStrategy = ThinkingStrategy.BALANCED,
         verbose: bool = False,
         use_tools: bool = True,
-        temperature: float = 0.0
+        temperature: float = 0.0,
     ):
         """Initialize the LLM chess agent."""
-        super().__init__(
-            name=spec.name,
-            strategy=strategy,
-            verbose=verbose
-        )
+        super().__init__(name=spec.name, strategy=strategy, verbose=verbose)
 
         self.spec = spec
         self.provider = spec.provider
@@ -193,15 +131,19 @@ class LLMChessAgent(ChessAgent):
         """Initialize the LLM client based on provider."""
         if self.provider == "openai":
             from ..client import OpenAIProvider
+
             self.llm_client = OpenAIProvider(self.spec)
         elif self.provider == "anthropic":
             from ..client import AnthropicProvider
+
             self.llm_client = AnthropicProvider(self.spec)
         elif self.provider == "gemini":
             from ..client import GeminiProvider
+
             self.llm_client = GeminiProvider(self.spec)
         elif self.provider == "random":
             from ..client import RandomProvider
+
             self.llm_client = RandomProvider(self.spec)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
@@ -252,17 +194,21 @@ class LLMChessAgent(ChessAgent):
             insights = self._parse_strategic_insights(response)
 
             for insight in insights:
-                self.thoughts.append(AgentThought(
-                    thought_type="analysis",
-                    content=insight,
-                    confidence=0.7,
-                    supporting_data={"source": "llm_analysis"}
-                ))
+                self.thoughts.append(
+                    AgentThought(
+                        thought_type="analysis",
+                        content=insight,
+                        confidence=0.7,
+                        supporting_data={"source": "llm_analysis"},
+                    )
+                )
 
         except Exception as e:
             logger.warning(f"LLM analysis failed: {e}")
 
-    async def _make_decision(self, evaluated_moves: List[Tuple[MoveAnalysis, float]]) -> AgentDecision:
+    async def _make_decision(
+        self, evaluated_moves: List[Tuple[MoveAnalysis, float]]
+    ) -> AgentDecision:
         """
         Make final decision with optional LLM confirmation.
         """
@@ -288,12 +234,14 @@ class LLMChessAgent(ChessAgent):
                 for move_analysis, score in evaluated_moves:
                     if move_analysis.move == llm_choice:
                         # Create new decision with LLM's choice
-                        self.thoughts.append(AgentThought(
-                            thought_type="decision",
-                            content=f"LLM override: Choosing {move_analysis.san} instead",
-                            confidence=0.8,
-                            supporting_data={"llm_reasoning": response}
-                        ))
+                        self.thoughts.append(
+                            AgentThought(
+                                thought_type="decision",
+                                content=f"LLM override: Choosing {move_analysis.san} instead",
+                                confidence=0.8,
+                                supporting_data={"llm_reasoning": response},
+                            )
+                        )
 
                         return AgentDecision(
                             move=move_analysis.move,
@@ -302,7 +250,7 @@ class LLMChessAgent(ChessAgent):
                             reasoning=self.thoughts.copy(),
                             confidence=0.8,
                             alternatives_considered=[m[0] for m in evaluated_moves],
-                            time_taken=base_decision.time_taken
+                            time_taken=base_decision.time_taken,
                         )
 
         except Exception as e:
@@ -314,56 +262,7 @@ class LLMChessAgent(ChessAgent):
         """
         Call the LLM with a prompt and return the response.
         """
-        # Create a minimal board state for the LLM call
-        board_state = str(self.current_board)
-        move_history = []  # We don't need full history for agent decisions
-
-        # Use the existing provider's generate_move method with our custom prompt
-        # We'll override the prompt creation in the provider
-        original_create_prompt = self.llm_client._create_chess_prompt
-
-        try:
-            # Temporarily replace the prompt creation
-            self.llm_client._create_chess_prompt = lambda *args: prompt
-
-            # Call the LLM
-            response = await self.llm_client.generate_move(
-                self.current_board,
-                temperature=self.temperature,
-                timeout_s=20.0,
-                move_history=move_history
-            )
-
-            # Track costs if requested
-            if track_costs:
-                record_llm_usage(
-                    provider=self.provider,
-                    model=self.model,
-                    bot_name=self.name,
-                    prompt=prompt,
-                    response=response,
-                    success=True
-                )
-
-            return response
-
-        except Exception as e:
-            # Track failed usage
-            if track_costs:
-                record_llm_usage(
-                    provider=self.provider,
-                    model=self.model,
-                    bot_name=self.name,
-                    prompt=prompt,
-                    response="",
-                    success=False,
-                    error_message=str(e)
-                )
-            raise
-
-        finally:
-            # Restore original prompt creation
-            self.llm_client._create_chess_prompt = original_create_prompt
+        return await self.llm_client.complete(prompt, self.temperature, 60.0)
 
     def _create_evaluation_prompt(self, move_analysis: MoveAnalysis) -> str:
         """Create a prompt for LLM to evaluate a specific move."""
@@ -412,7 +311,9 @@ Keep each insight to one sentence.
 Separate insights with newlines.
 """
 
-    def _create_decision_prompt(self, evaluated_moves: List[Tuple[MoveAnalysis, float]]) -> str:
+    def _create_decision_prompt(
+        self, evaluated_moves: List[Tuple[MoveAnalysis, float]]
+    ) -> str:
         """Create a prompt for final move decision."""
         # Show ALL legal moves to the LLM, not just top candidates
         all_moves = []
@@ -447,7 +348,8 @@ Respond with just the move in SAN notation (e.g., "Nf3" or "e4").
         try:
             # Extract number from response
             import re
-            numbers = re.findall(r'-?\d+\.?\d*', response)
+
+            numbers = re.findall(r"-?\d+\.?\d*", response)
             if numbers:
                 score = float(numbers[0])
                 # Clamp to valid range
@@ -461,25 +363,29 @@ Respond with just the move in SAN notation (e.g., "Nf3" or "e4").
         """Parse strategic insights from LLM response."""
         insights = []
 
-        lines = response.strip().split('\n')
+        lines = response.strip().split("\n")
         for line in lines:
             line = line.strip()
             if line and len(line) > 10:  # Filter out very short lines
                 # Clean up common prefixes
-                line = line.lstrip('- •·123456789.')
+                line = line.lstrip("- •·123456789.")
                 if line:
                     insights.append(line)
 
         return insights[:3]  # Limit to 3 insights
 
-    def _parse_move_choice(self, response: str, evaluated_moves: List[Tuple[MoveAnalysis, float]]) -> Optional[chess.Move]:
+    def _parse_move_choice(
+        self, response: str, evaluated_moves: List[Tuple[MoveAnalysis, float]]
+    ) -> Optional[chess.Move]:
         """Parse the LLM's move choice from response."""
         try:
             # Try to extract a move in SAN notation
             import re
 
             # Common chess move patterns
-            move_pattern = r'\b([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQ])?[+#]?|O-O-O|O-O)\b'
+            move_pattern = (
+                r"\b([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQ])?[+#]?|O-O-O|O-O)\b"
+            )
             matches = re.findall(move_pattern, response)
 
             if matches:
@@ -510,7 +416,7 @@ def create_agent_provider(
     strategy: str = "balanced",
     verbose: bool = False,
     use_tools: bool = True,
-    temperature: float = 0.0
+    temperature: float = 0.0,
 ) -> LLMAgentProvider:
     """
     Factory function to create an agent-based LLM provider.
@@ -529,7 +435,7 @@ def create_agent_provider(
         "fast": ThinkingStrategy.FAST,
         "balanced": ThinkingStrategy.BALANCED,
         "deep": ThinkingStrategy.DEEP,
-        "adaptive": ThinkingStrategy.ADAPTIVE
+        "adaptive": ThinkingStrategy.ADAPTIVE,
     }
 
     thinking_strategy = strategy_map.get(strategy.lower(), ThinkingStrategy.BALANCED)
@@ -539,5 +445,5 @@ def create_agent_provider(
         strategy=thinking_strategy,
         verbose=verbose,
         use_tools=use_tools,
-        temperature=temperature
+        temperature=temperature,
     )

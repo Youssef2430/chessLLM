@@ -1,0 +1,15 @@
+[Event "Chess LLM · protocol 3"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "1"]
+[White "gemini-3.1-pro"]
+[Black "Stockfish (1320)"]
+[Result "*"]
+[Opening "King's Indian Defense"]
+[ECO "E60"]
+[Protocol "3-subscription"]
+[ReasoningEffort "high"]
+[Termination "provider_error"]
+[Seed "42"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 c6 4. e4 d5 5. e5 Nh5 6. Be2 Ng7 7. Nf3 Bg4 8. cxd5 Nf5 *

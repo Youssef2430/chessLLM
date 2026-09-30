@@ -11,6 +11,7 @@ from ..core.models import BotSpec
 
 class ModelInfo(NamedTuple):
     """Information about a specific model."""
+
     name: str
     display_name: str
     provider: str
@@ -31,7 +32,7 @@ OPENAI_MODELS = [
         description="Latest GPT-4 Omni model with enhanced reasoning",
         recommended=True,
         context_length=128000,
-        notes="Best overall performance, multimodal capabilities"
+        notes="Best overall performance, multimodal capabilities",
     ),
     ModelInfo(
         name="gpt-4o-mini",
@@ -41,7 +42,7 @@ OPENAI_MODELS = [
         description="Faster, cost-effective GPT-4o variant",
         recommended=True,
         context_length=128000,
-        notes="Great balance of speed and intelligence"
+        notes="Great balance of speed and intelligence",
     ),
     ModelInfo(
         name="gpt-4-turbo",
@@ -51,7 +52,7 @@ OPENAI_MODELS = [
         description="High-performance GPT-4 with large context",
         recommended=False,
         context_length=128000,
-        notes="Powerful but slower than 4o variants"
+        notes="Powerful but slower than 4o variants",
     ),
     ModelInfo(
         name="gpt-3.5-turbo",
@@ -61,7 +62,7 @@ OPENAI_MODELS = [
         description="Fast and efficient legacy model",
         recommended=False,
         context_length=16385,
-        notes="Budget option, decent chess performance"
+        notes="Budget option, decent chess performance",
     ),
 ]
 
@@ -75,7 +76,7 @@ ANTHROPIC_MODELS = [
         description="Most intelligent Claude model with excellent reasoning",
         recommended=True,
         context_length=200000,
-        notes="Top-tier performance, excellent at strategic thinking"
+        notes="Top-tier performance, excellent at strategic thinking",
     ),
     ModelInfo(
         name="claude-3-5-haiku",
@@ -85,7 +86,7 @@ ANTHROPIC_MODELS = [
         description="Fast and efficient Claude model",
         recommended=True,
         context_length=200000,
-        notes="Good balance of speed and capability"
+        notes="Good balance of speed and capability",
     ),
     ModelInfo(
         name="claude-3-opus",
@@ -95,7 +96,7 @@ ANTHROPIC_MODELS = [
         description="Most capable legacy Claude model",
         recommended=False,
         context_length=200000,
-        notes="Powerful but expensive, superseded by 3.5 Sonnet"
+        notes="Powerful but expensive, superseded by 3.5 Sonnet",
     ),
     ModelInfo(
         name="claude-3-haiku",
@@ -105,7 +106,7 @@ ANTHROPIC_MODELS = [
         description="Fast and cost-effective legacy model",
         recommended=False,
         context_length=200000,
-        notes="Budget option, decent performance"
+        notes="Budget option, decent performance",
     ),
 ]
 
@@ -119,7 +120,7 @@ GEMINI_MODELS = [
         description="Most capable Gemini model with large context",
         recommended=True,
         context_length=1000000,
-        notes="Excellent reasoning, massive context window"
+        notes="Excellent reasoning, massive context window",
     ),
     ModelInfo(
         name="gemini-2.5-flash",
@@ -129,7 +130,7 @@ GEMINI_MODELS = [
         description="Fast and efficient Gemini model",
         recommended=True,
         context_length=1000000,
-        notes="Great speed-to-performance ratio"
+        notes="Great speed-to-performance ratio",
     ),
     ModelInfo(
         name="gemini-1.0-pro",
@@ -139,7 +140,92 @@ GEMINI_MODELS = [
         description="Legacy Gemini Pro model",
         recommended=False,
         context_length=30720,
-        notes="Older model, use 2.5 variants instead"
+        notes="Older model, use 2.5 variants instead",
+    ),
+]
+
+# Preserve the original catalog for explicit legacy comparisons only.
+OPENAI_MODELS = [
+    model._replace(
+        recommended=False,
+        description="Historical model; availability is not guaranteed",
+        notes="Use for historical comparisons only",
+    )
+    for model in OPENAI_MODELS
+] + [
+    ModelInfo(
+        "gpt-6-astra",
+        "GPT-6 Astra",
+        "openai",
+        "gpt-6-astra",
+        "Flagship reasoning model",
+        True,
+    ),
+    ModelInfo(
+        "gpt-6.1-sol",
+        "GPT-6.1 Sol",
+        "openai",
+        "gpt-6.1-sol",
+        "Mid-tier reasoning model",
+        True,
+    ),
+    ModelInfo(
+        "gpt-6-luna",
+        "GPT-6 Luna",
+        "openai",
+        "gpt-6-luna",
+        "Low-cost reasoning model",
+        True,
+    ),
+]
+ANTHROPIC_MODELS = [
+    model._replace(
+        recommended=False,
+        description="Historical model; availability is not guaranteed",
+        notes="Use for historical comparisons only",
+    )
+    for model in ANTHROPIC_MODELS
+] + [
+    ModelInfo(
+        "claude-sonnet-5-5",
+        "Claude Sonnet 5.5",
+        "anthropic",
+        "claude-sonnet-5-5",
+        "Adaptive reasoning model",
+        True,
+    ),
+    ModelInfo(
+        "claude-haiku-4-5",
+        "Claude Haiku 4.5",
+        "anthropic",
+        "claude-haiku-4-5-20251001",
+        "Fast low-cost model",
+        True,
+    ),
+]
+GEMINI_MODELS = [
+    model._replace(
+        recommended=False,
+        description="Historical model; availability is not guaranteed",
+        notes="Use for historical comparisons only",
+    )
+    for model in GEMINI_MODELS
+] + [
+    ModelInfo(
+        "gemini-3.8-flash",
+        "Gemini 3.8 Flash",
+        "gemini",
+        "gemini-3.8-flash",
+        "Current Flash reasoning model",
+        True,
+    ),
+    ModelInfo(
+        "gemini-3.5-flash-lite",
+        "Gemini 3.5 Flash Lite",
+        "gemini",
+        "gemini-3.5-flash-lite",
+        "Low-cost Flash model",
+        True,
     ),
 ]
 
@@ -224,11 +310,7 @@ def create_bot_specs(models: List[ModelInfo]) -> List[BotSpec]:
         List of BotSpec objects
     """
     return [
-        BotSpec(
-            provider=model.provider,
-            model=model.model_id,
-            name=model.display_name
-        )
+        BotSpec(provider=model.provider, model=model.model_id, name=model.display_name)
         for model in models
     ]
 
@@ -241,12 +323,12 @@ def get_latest_bot_lineup() -> List[BotSpec]:
         List of BotSpec objects for latest models
     """
     latest_models = [
-        get_model_info("openai", "gpt-4o"),
-        get_model_info("openai", "gpt-4o-mini"),
-        get_model_info("anthropic", "claude-3-5-sonnet"),
-        get_model_info("anthropic", "claude-3-5-haiku"),
-        get_model_info("gemini", "gemini-2.5-pro"),
-        get_model_info("gemini", "gemini-2.5-flash"),
+        get_model_info("openai", "gpt-6-astra"),
+        get_model_info("openai", "gpt-6-luna"),
+        get_model_info("anthropic", "claude-sonnet-5-5"),
+        get_model_info("anthropic", "claude-haiku-4-5"),
+        get_model_info("gemini", "gemini-3.8-flash"),
+        get_model_info("gemini", "gemini-3.5-flash-lite"),
     ]
     return create_bot_specs(latest_models)
 
@@ -282,11 +364,21 @@ def get_all_recommended_bots() -> List[BotSpec]:
 PRESET_CONFIGS = {
     "latest": {
         "bots": get_latest_bot_lineup(),
-        "description": "Latest models from each provider"
+        "description": "Six current models across cost tiers (verified 2026-09-29)",
+    },
+    "budget": {
+        "bots": create_bot_specs(
+            [
+                get_model_info("openai", "gpt-6-luna"),
+                get_model_info("anthropic", "claude-haiku-4-5"),
+                get_model_info("gemini", "gemini-3.5-flash-lite"),
+            ]
+        ),
+        "description": "Three inexpensive models, one per provider (verified 2026-09-29)",
     },
     "legacy": {
         "bots": get_legacy_bot_lineup(),
-        "description": "Legacy models from each provider"
+        "description": "Legacy models from each provider",
     },
 }
 
@@ -316,7 +408,8 @@ def print_available_models():
             status = "⭐ RECOMMENDED" if model.recommended else "  Available"
             print(f"{status} {model.display_name}")
             print(f"    Model ID: {model.model_id}")
-            print(f"    Context: {model.context_length:,} tokens")
+            if model.context_length:
+                print(f"    Context: {model.context_length:,} tokens")
             print(f"    Description: {model.description}")
             if model.notes:
                 print(f"    Notes: {model.notes}")

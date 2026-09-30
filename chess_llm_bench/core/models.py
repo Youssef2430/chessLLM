@@ -8,7 +8,7 @@ for representing bots, games, statistics, and UI state.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -20,8 +20,8 @@ class BotSpec:
     """Specification for a chess bot/LLM configuration."""
 
     provider: str  # "openai", "anthropic", "random", etc.
-    model: str     # Model name (empty for random)
-    name: str      # Display name for the bot
+    model: str  # Model name (empty for random)
+    name: str  # Display name for the bot
 
     def __post_init__(self):
         """Validate bot specification after initialization."""
@@ -32,20 +32,34 @@ class BotSpec:
         self.provider = self.provider.lower()
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.provider}:{self.model})" if self.model else f"{self.name} ({self.provider})"
+        return (
+            f"{self.name} ({self.provider}:{self.model})"
+            if self.model
+            else f"{self.name} ({self.provider})"
+        )
 
 
 @dataclass
 class GameRecord:
     """Record of a completed chess game."""
 
-    elo: int                    # Engine ELO rating for this game
-    color_llm_white: bool      # True if LLM played as white
-    result: str                # "1-0", "0-1", "1/2-1/2"
-    ply_count: int            # Number of half-moves in the game
-    path: Path                # Path to saved PGN file
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-    game_duration: float = 0.0  # Total game duration in seconds including API response times
+    elo: int  # Engine ELO rating for this game
+    color_llm_white: bool  # True if LLM played as white
+    result: str  # "1-0", "0-1", "1/2-1/2"
+    ply_count: int  # Number of half-moves in the game
+    path: Path  # Path to saved PGN file
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    game_duration: float = 0.0
+    termination: str = "normal"
+    llm_moves: int = 0
+    llm_requests: int = 0
+    opening: str = ""
+    seed: int = 0
+    error: Optional[str] = None
+
+    @property
+    def completed(self) -> bool:
+        return self.result in {"1-0", "0-1", "1/2-1/2"}
 
     @property
     def llm_won(self) -> bool:
@@ -78,6 +92,7 @@ class LadderStats:
     max_elo_reached: int = 0
     games: List[GameRecord] = field(default_factory=list)
     losses: int = 0
+    aborted: int = 0
     draws: int = 0
     wins: int = 0
 
@@ -89,7 +104,7 @@ class LadderStats:
     @property
     def total_games(self) -> int:
         """Total number of games played."""
-        return len(self.games)
+        return sum(game.completed for game in self.games)
 
     @property
     def win_rate(self) -> float:
@@ -97,6 +112,28 @@ class LadderStats:
         if self.total_games == 0:
             return 0.0
         return self.wins / self.total_games
+
+    @property
+    def score_rate(self) -> Optional[float]:
+        return (
+            (self.wins + 0.5 * self.draws) / self.total_games
+            if self.total_games
+            else None
+        )
+
+    @property
+    def win_rate_interval(self):
+        """Descriptive Wilson 95% interval, treating games as independent trials.
+
+        Opening-pair dependence means this is not a significance test of ranks.
+        """
+        if not self.total_games:
+            return None
+        n, z, p = self.total_games, 1.95996398454, self.win_rate
+        denominator = 1 + z * z / n
+        center = (p + z * z / (2 * n)) / denominator
+        half = z * (p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5 / denominator
+        return max(0, center - half), min(1, center + half)
 
     @property
     def draw_rate(self) -> float:
@@ -115,6 +152,10 @@ class LadderStats:
     def add_game(self, game: GameRecord) -> None:
         """Add a game record and update statistics."""
         self.games.append(game)
+        self.add_game_duration(game.game_duration)
+        if not game.completed:
+            self.aborted += 1
+            return
         self.max_elo_reached = max(self.max_elo_reached, game.elo)
 
         if game.llm_won:
@@ -124,13 +165,11 @@ class LadderStats:
         else:
             self.draws += 1
 
-        # Add game duration statistics
-        self.add_game_duration(game.game_duration)
-
     def reset(self) -> None:
         """Reset all statistics."""
         self.max_elo_reached = 0
         self.games.clear()
+        self.aborted = 0
         self.losses = 0
         self.draws = 0
         self.wins = 0
@@ -141,7 +180,7 @@ class LadderStats:
     @property
     def average_move_time(self) -> float:
         """Average time per move across all games."""
-        total_moves = sum(game.ply_count for game in self.games)
+        total_moves = sum(game.llm_requests for game in self.games)
         if total_moves == 0:
             return 0.0
         return self.total_move_time / total_moves
@@ -158,9 +197,9 @@ class LadderStats:
     @property
     def average_game_duration(self) -> float:
         """Average duration per game."""
-        if self.total_games == 0:
+        if not self.games:
             return 0.0
-        return self.total_game_duration / self.total_games
+        return self.total_game_duration / len(self.games)
 
 
 @dataclass
@@ -208,7 +247,9 @@ class LiveState:
         """Human-readable color assignment."""
         return "White" if self.color_llm_white else "Black"
 
-    def update_board_state(self, board_ascii: str, last_move: str, moves_made: int) -> None:
+    def update_board_state(
+        self, board_ascii: str, last_move: str, moves_made: int
+    ) -> None:
         """Update the current board visualization state."""
         self.board_ascii = board_ascii
         self.last_move_uci = last_move
@@ -236,17 +277,27 @@ class Config:
     human_engine_fallback: bool = True  # Fall back to stockfish if human engine fails
 
     # Adaptive engine settings
-    adaptive_elo_engines: bool = True  # Use specialized engines for different ELO ranges
+    adaptive_elo_engines: bool = (
+        False  # Use specialized engines for different ELO ranges
+    )
 
     # ELO ladder settings
     start_elo: int = 600
     elo_step: int = 100
     max_elo: int = 2400
-    fixed_opponent_elo: Optional[int] = None  # If set, play against fixed ELO instead of ladder
+    fixed_opponent_elo: Optional[int] = (
+        None  # If set, play against fixed ELO instead of ladder
+    )
 
     # Game settings
     think_time: float = 0.3
-    max_plies: int = 300
+    max_plies: int = 200
+    max_games: int = 10
+    seed: int = 42
+    protocol_version: str = "2"
+    max_output_tokens: int = 2048
+    reasoning_effort: str = "low"
+    results_db: str = "data/results-v2.db"
     escalate_on: str = "always"  # "always" or "on_win"
 
     # LLM settings
@@ -268,6 +319,36 @@ class Config:
     # Budget tracking settings
     budget_limit: Optional[float] = None
     show_costs: bool = False
+
+    def __post_init__(self):
+        import math
+
+        for name in (
+            "max_games",
+            "max_plies",
+            "max_output_tokens",
+            "elo_step",
+            "refresh_rate",
+        ):
+            if not isinstance(getattr(self, name), int) or getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive")
+        if self.max_plies < 8:
+            raise ValueError("max_plies must be at least 8 to include every opening")
+        if self.reasoning_effort not in {"low", "medium", "high"}:
+            raise ValueError("reasoning_effort must be low, medium or high")
+        if self.max_games % 2:
+            raise ValueError("max_games must be even for color-balanced opening pairs")
+        for name in ("think_time", "llm_timeout"):
+            if not math.isfinite(getattr(self, name)) or getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive and finite")
+        if self.budget_limit is not None and (
+            not math.isfinite(self.budget_limit) or self.budget_limit < 0
+        ):
+            raise ValueError("budget_limit must be finite and nonnegative")
+        if self.start_elo > self.max_elo:
+            raise ValueError("start_elo must not exceed max_elo")
+        if self.fixed_opponent_elo is not None and self.fixed_opponent_elo < 0:
+            raise ValueError("fixed_opponent_elo must be nonnegative")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
@@ -300,9 +381,16 @@ class BenchmarkResult:
     @property
     def best_bot(self) -> Optional[str]:
         """Name of the bot that reached the highest ELO."""
-        if not self.bot_results:
-            return None
-        return max(self.bot_results.keys(), key=lambda name: self.bot_results[name].max_elo_reached)
+        eligible = {
+            name: stats
+            for name, stats in self.bot_results.items()
+            if stats.total_games and not stats.aborted
+        }
+        return (
+            max(eligible, key=lambda name: eligible[name].score_rate)
+            if eligible
+            else None
+        )
 
     @property
     def best_elo(self) -> int:

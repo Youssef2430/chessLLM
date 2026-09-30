@@ -18,16 +18,7 @@ from chess_llm_bench.core.models import Config, BotSpec
 from chess_llm_bench.core.engine import ChessEngine
 
 
-def async_test(coro):
-    """Decorator to run async tests."""
-    def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(coro(*args, **kwargs))
-    return wrapper
-
-
-
-class ProtocolTests(unittest.TestCase):
+class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     """Test chess protocol validation and error detection."""
 
     def setUp(self):
@@ -51,7 +42,6 @@ class ProtocolTests(unittest.TestCase):
         # Create game runner
         self.game_runner = GameRunner(self.llm_client, self.engine, self.config)
 
-    @async_test
     async def test_wrong_side_to_move(self):
         """
         Test detection of moves played on wrong side-to-move.
@@ -60,15 +50,19 @@ class ProtocolTests(unittest.TestCase):
         attempts to move when it's not their turn.
         """
         # Setup a position where it's Black's move
-        board = chess.Board("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")
+        board = chess.Board(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+        )
 
         # LLM plays as White and attempts to move when it's Black's turn
-        self.llm_client.get_move.return_value = chess.Move.from_uci("e2e4")  # White pawn move
+        self.llm_client.get_move.return_value = chess.Move.from_uci(
+            "e2e4"
+        )  # White pawn move
 
         # In real gameplay, the system should never call LLM's get_move when it's not their turn
         # But we can test that the move validation would catch this
         illegal_moves = []
-        with patch.object(self.game_runner, '_execute_move') as mock_execute:
+        with patch.object(self.game_runner, "_execute_move") as mock_execute:
             mock_execute.side_effect = lambda board, move, *args, **kwargs: (
                 illegal_moves.append(move) if move not in board.legal_moves else None
             )
@@ -80,9 +74,10 @@ class ProtocolTests(unittest.TestCase):
             else:
                 illegal_moves.append(move)
 
-        self.assertGreaterEqual(len(illegal_moves), 1, "Wrong side-to-move not detected")
+        self.assertGreaterEqual(
+            len(illegal_moves), 1, "Wrong side-to-move not detected"
+        )
 
-    @async_test
     async def test_illegal_uci_move(self):
         """
         Test detection of illegal UCI moves.
@@ -94,13 +89,14 @@ class ProtocolTests(unittest.TestCase):
         board = chess.Board()
 
         # LLM returns an illegal move (moving a pawn two squares after it already moved)
-        self.llm_client.get_move.return_value = chess.Move.from_uci("e2e5")  # Illegal pawn move
+        self.llm_client.get_move.return_value = chess.Move.from_uci(
+            "e2e5"
+        )  # Illegal pawn move
 
         # Check that the move would be rejected
         move = await self.llm_client.get_move(board)
         self.assertNotIn(move, board.legal_moves, "Illegal UCI move not detected")
 
-    @async_test
     async def test_checkmate_detection(self):
         """
         Test detection of checkmate.
@@ -118,7 +114,6 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(board.is_game_over(), "Failed to recognize game over")
         self.assertEqual(board.result(), "1-0", "Incorrect result for checkmate")
 
-    @async_test
     async def test_stalemate_detection(self):
         """
         Test detection of stalemate.
@@ -134,7 +129,6 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(board.is_game_over(), "Failed to recognize game over")
         self.assertEqual(board.result(), "1/2-1/2", "Incorrect result for stalemate")
 
-    @async_test
     async def test_threefold_repetition(self):
         """
         Test detection of threefold repetition.
@@ -149,14 +143,15 @@ class ProtocolTests(unittest.TestCase):
             board.push(chess.Move.from_uci(move_uci))
 
         # Verify that threefold repetition is detected
-        self.assertTrue(board.can_claim_threefold_repetition(),
-                        "Failed to recognize threefold repetition claim")
+        self.assertTrue(
+            board.can_claim_threefold_repetition(),
+            "Failed to recognize threefold repetition claim",
+        )
 
         # Claim the draw and verify the result
         result = board.result(claim_draw=True)
         self.assertEqual(result, "1/2-1/2", "Incorrect result for threefold repetition")
 
-    @async_test
     async def test_fifty_move_rule(self):
         """
         Test detection of fifty-move rule.
@@ -172,18 +167,21 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(board.halfmove_clock, 100)
 
         # At 100 half-moves, we should be able to claim the fifty-move rule
-        self.assertTrue(board.can_claim_fifty_moves(),
-                        "Failed to recognize fifty-move claim at 100 half-moves")
+        self.assertTrue(
+            board.can_claim_fifty_moves(),
+            "Failed to recognize fifty-move claim at 100 half-moves",
+        )
 
         # Claim the draw and verify the result
         result = board.result(claim_draw=True)
         self.assertEqual(result, "1/2-1/2", "Incorrect result for fifty-move rule")
 
         # Test that the game is considered over when claiming the draw
-        self.assertTrue(board.is_game_over(claim_draw=True),
-                        "Game should be over when fifty-move rule is claimed")
+        self.assertTrue(
+            board.is_game_over(claim_draw=True),
+            "Game should be over when fifty-move rule is claimed",
+        )
 
-    @async_test
     async def test_game_end_on_checkmate(self):
         """Test that game properly ends when checkmate is reached."""
         # Create a mock game state
@@ -191,7 +189,9 @@ class ProtocolTests(unittest.TestCase):
         mock_state.status = "playing"
 
         # Create a board with checkmate
-        board = chess.Board("r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 1")
+        board = chess.Board(
+            "r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 1"
+        )
 
         # Verify the position is checkmate and game is over
         self.assertTrue(board.is_checkmate())
@@ -201,7 +201,6 @@ class ProtocolTests(unittest.TestCase):
         result = board.result(claim_draw=True)
         self.assertEqual(result, "1-0", "Checkmate not properly recognized")
 
-    @async_test
     async def test_game_end_on_draw(self):
         """Test that game properly ends on draw conditions."""
         # Create a mock game state
@@ -215,14 +214,18 @@ class ProtocolTests(unittest.TestCase):
             # Insufficient material (K vs K)
             "8/8/8/8/8/8/k7/7K w - - 0 1",
             # Insufficient material (K+N vs K)
-            "8/8/8/8/8/8/k1N5/7K b - - 0 1"
+            "8/8/8/8/8/8/k1N5/7K b - - 0 1",
         ]
 
         for fen in draw_positions:
             board = chess.Board(fen)
-            self.assertTrue(board.is_game_over(), f"Failed to detect game over in position: {fen}")
+            self.assertTrue(
+                board.is_game_over(), f"Failed to detect game over in position: {fen}"
+            )
             result = board.result(claim_draw=True)
-            self.assertEqual(result, "1/2-1/2", f"Draw not properly recognized in position: {fen}")
+            self.assertEqual(
+                result, "1/2-1/2", f"Draw not properly recognized in position: {fen}"
+            )
 
 
 if __name__ == "__main__":

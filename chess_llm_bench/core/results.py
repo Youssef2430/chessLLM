@@ -76,23 +76,11 @@ class ModelPerformance:
         """Calculate efficiency score (ELO per dollar)."""
         if self.total_cost > 0:
             return self.max_elo / self.total_cost
-        return float('inf') if self.max_elo > 0 else 0.0
+        return float("inf") if self.max_elo > 0 else 0.0
 
     @property
     def performance_rating(self) -> str:
-        """Get performance rating based on max ELO."""
-        if self.max_elo >= 2000:
-            return "🏆 Grandmaster"
-        elif self.max_elo >= 1800:
-            return "⭐ Master"
-        elif self.max_elo >= 1400:
-            return "👍 Expert"
-        elif self.max_elo >= 1000:
-            return "📈 Intermediate"
-        elif self.max_elo >= 600:
-            return "📚 Beginner"
-        else:
-            return "🤖 Learning"
+        return "Unrated (opponent setting only)"
 
 
 @dataclass
@@ -189,134 +177,176 @@ class ResultsDatabase:
         """Store a complete benchmark record."""
         with sqlite3.connect(self.db_path) as conn:
             # Store benchmark metadata
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO benchmarks
                 (run_id, timestamp, config, total_games, total_cost, duration_seconds, version, environment, notes)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                benchmark.run_id,
-                benchmark.timestamp,
-                json.dumps(benchmark.config),
-                benchmark.total_games,
-                benchmark.total_cost,
-                benchmark.duration.total_seconds(),
-                benchmark.version,
-                json.dumps(benchmark.environment),
-                benchmark.notes
-            ))
+            """,
+                (
+                    benchmark.run_id,
+                    benchmark.timestamp.isoformat(),
+                    json.dumps(benchmark.config),
+                    benchmark.total_games,
+                    benchmark.total_cost,
+                    benchmark.duration.total_seconds(),
+                    benchmark.version,
+                    json.dumps(benchmark.environment),
+                    benchmark.notes,
+                ),
+            )
 
+            conn.execute(
+                "DELETE FROM model_performances WHERE run_id = ?", (benchmark.run_id,)
+            )
             # Store model performances
             for model in benchmark.models:
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO model_performances
                     (run_id, model_id, provider, model_name, display_name, max_elo, avg_elo,
                      total_games, wins, draws, losses, win_rate, draw_rate, loss_rate,
                      consistency_score, improvement_rate, avg_time_per_game, total_cost,
                      cost_per_game, cost_per_elo, elo_history)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    benchmark.run_id,
-                    model.model_id,
-                    model.provider,
-                    model.model_name,
-                    model.display_name,
-                    model.max_elo,
-                    model.avg_elo,
-                    model.total_games,
-                    model.wins,
-                    model.draws,
-                    model.losses,
-                    model.win_rate,
-                    model.draw_rate,
-                    model.loss_rate,
-                    model.consistency_score,
-                    model.improvement_rate,
-                    model.avg_time_per_game,
-                    model.total_cost,
-                    model.cost_per_game,
-                    model.cost_per_elo,
-                    json.dumps(model.elo_history)
-                ))
+                """,
+                    (
+                        benchmark.run_id,
+                        model.model_id,
+                        model.provider,
+                        model.model_name,
+                        model.display_name,
+                        model.max_elo,
+                        model.avg_elo,
+                        model.total_games,
+                        model.wins,
+                        model.draws,
+                        model.losses,
+                        model.win_rate,
+                        model.draw_rate,
+                        model.loss_rate,
+                        model.consistency_score,
+                        model.improvement_rate,
+                        model.avg_time_per_game,
+                        model.total_cost,
+                        model.cost_per_game,
+                        model.cost_per_elo,
+                        json.dumps(model.elo_history),
+                    ),
+                )
 
     def get_model_history(self, model_id: str) -> List[ModelPerformance]:
         """Get historical performance for a specific model."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT * FROM model_performances
                 WHERE model_id = ?
                 ORDER BY (SELECT timestamp FROM benchmarks WHERE benchmarks.run_id = model_performances.run_id)
-            """, (model_id,))
+            """,
+                (model_id,),
+            )
 
             performances = []
             for row in cursor.fetchall():
                 perf = ModelPerformance(
-                    model_id=row['model_id'],
-                    provider=row['provider'],
-                    model_name=row['model_name'],
-                    display_name=row['display_name'],
-                    max_elo=row['max_elo'],
-                    avg_elo=row['avg_elo'],
-                    total_games=row['total_games'],
-                    wins=row['wins'],
-                    draws=row['draws'],
-                    losses=row['losses'],
-                    win_rate=row['win_rate'],
-                    draw_rate=row['draw_rate'],
-                    loss_rate=row['loss_rate'],
-                    consistency_score=row['consistency_score'],
-                    improvement_rate=row['improvement_rate'],
-                    avg_time_per_game=row['avg_time_per_game'],
-                    total_cost=row['total_cost'],
-                    cost_per_game=row['cost_per_game'],
-                    cost_per_elo=row['cost_per_elo'],
-                    elo_history=json.loads(row['elo_history']) if row['elo_history'] else []
+                    model_id=row["model_id"],
+                    provider=row["provider"],
+                    model_name=row["model_name"],
+                    display_name=row["display_name"],
+                    max_elo=row["max_elo"],
+                    avg_elo=row["avg_elo"],
+                    total_games=row["total_games"],
+                    wins=row["wins"],
+                    draws=row["draws"],
+                    losses=row["losses"],
+                    win_rate=row["win_rate"],
+                    draw_rate=row["draw_rate"],
+                    loss_rate=row["loss_rate"],
+                    consistency_score=row["consistency_score"],
+                    improvement_rate=row["improvement_rate"],
+                    avg_time_per_game=row["avg_time_per_game"],
+                    total_cost=row["total_cost"],
+                    cost_per_game=row["cost_per_game"],
+                    cost_per_elo=row["cost_per_elo"],
+                    elo_history=(
+                        json.loads(row["elo_history"]) if row["elo_history"] else []
+                    ),
                 )
                 performances.append(perf)
 
             return performances
 
-    def get_leaderboard(self, limit: int = 50, metric: str = "max_elo") -> List[ModelPerformance]:
+    def store_games(self, result, bots):
+        mapping = {bot.name: f"{bot.provider}:{bot.model}" for bot in bots}
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM game_records WHERE run_id = ?", (result.run_id,))
+            for name, stats in result.bot_results.items():
+                for game in stats.games:
+                    conn.execute(
+                        """INSERT INTO game_records
+                        (run_id, model_id, elo, color_llm_white, result, ply_count, timestamp, game_path, cost)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            result.run_id,
+                            mapping[name],
+                            game.elo,
+                            game.color_llm_white,
+                            game.result,
+                            game.ply_count,
+                            game.timestamp.isoformat(),
+                            str(game.path),
+                            None,
+                        ),
+                    )
+
+    def get_leaderboard(
+        self, limit: int = 50, metric: str = "win_rate"
+    ) -> List[ModelPerformance]:
         """Get leaderboard ranked by specified metric."""
+        allowed = {"win_rate", "total_games", "max_elo", "total_cost"}
+        if metric not in allowed:
+            raise ValueError("Unsupported leaderboard metric")
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
 
             # Get latest performance for each model
-            cursor = conn.execute(f"""
-                WITH latest_runs AS (
-                    SELECT model_id, MAX(run_id) as latest_run_id
-                    FROM model_performances
-                    GROUP BY model_id
-                )
+            cursor = conn.execute(
+                f"""
                 SELECT mp.* FROM model_performances mp
-                JOIN latest_runs lr ON mp.model_id = lr.model_id AND mp.run_id = lr.latest_run_id
-                ORDER BY mp.{metric} DESC
+                WHERE mp.run_id = (SELECT run_id FROM benchmarks ORDER BY timestamp DESC LIMIT 1)
+                ORDER BY mp.{metric} DESC, mp.total_games DESC
                 LIMIT ?
-            """, (limit,))
+            """,
+                (limit,),
+            )
 
             leaderboard = []
             for row in cursor.fetchall():
                 perf = ModelPerformance(
-                    model_id=row['model_id'],
-                    provider=row['provider'],
-                    model_name=row['model_name'],
-                    display_name=row['display_name'],
-                    max_elo=row['max_elo'],
-                    avg_elo=row['avg_elo'],
-                    total_games=row['total_games'],
-                    wins=row['wins'],
-                    draws=row['draws'],
-                    losses=row['losses'],
-                    win_rate=row['win_rate'],
-                    draw_rate=row['draw_rate'],
-                    loss_rate=row['loss_rate'],
-                    consistency_score=row['consistency_score'],
-                    improvement_rate=row['improvement_rate'],
-                    avg_time_per_game=row['avg_time_per_game'],
-                    total_cost=row['total_cost'],
-                    cost_per_game=row['cost_per_game'],
-                    cost_per_elo=row['cost_per_elo'],
-                    elo_history=json.loads(row['elo_history']) if row['elo_history'] else []
+                    model_id=row["model_id"],
+                    provider=row["provider"],
+                    model_name=row["model_name"],
+                    display_name=row["display_name"],
+                    max_elo=row["max_elo"],
+                    avg_elo=row["avg_elo"],
+                    total_games=row["total_games"],
+                    wins=row["wins"],
+                    draws=row["draws"],
+                    losses=row["losses"],
+                    win_rate=row["win_rate"],
+                    draw_rate=row["draw_rate"],
+                    loss_rate=row["loss_rate"],
+                    consistency_score=row["consistency_score"],
+                    improvement_rate=row["improvement_rate"],
+                    avg_time_per_game=row["avg_time_per_game"],
+                    total_cost=row["total_cost"],
+                    cost_per_game=row["cost_per_game"],
+                    cost_per_elo=row["cost_per_elo"],
+                    elo_history=(
+                        json.loads(row["elo_history"]) if row["elo_history"] else []
+                    ),
                 )
                 leaderboard.append(perf)
 
@@ -340,11 +370,11 @@ class ResultsDatabase:
             stats = {}
             for row in cursor.fetchall():
                 stats[row[0]] = {
-                    'model_count': row[1],
-                    'avg_max_elo': row[2],
-                    'best_elo': row[3],
-                    'avg_cost': row[4],
-                    'avg_win_rate': row[5]
+                    "model_count": row[1],
+                    "avg_max_elo": row[2],
+                    "best_elo": row[3],
+                    "avg_cost": row[4],
+                    "avg_win_rate": row[5],
                 }
 
             return stats
@@ -357,65 +387,19 @@ class RankingSystem:
         self.db = db
         self.console = Console()
 
-    def calculate_elo_rating(self, performances: List[ModelPerformance]) -> Dict[str, float]:
+    def calculate_elo_rating(
+        self, performances: List[ModelPerformance]
+    ) -> Dict[str, float]:
         """Calculate ELO ratings based on head-to-head performance (simplified)."""
-        # This is a simplified ELO calculation based on Stockfish performance
-        # In a full implementation, you'd want actual head-to-head results
-        ratings = {}
-
-        for perf in performances:
-            # Base rating from maximum ELO achieved against Stockfish
-            base_rating = perf.max_elo
-
-            # Adjust for consistency (lower variance = higher rating)
-            consistency_bonus = max(0, 50 - perf.consistency_score)
-
-            # Adjust for win rate
-            win_rate_bonus = (perf.win_rate - 0.3) * 100  # Bonus above 30% win rate
-
-            # Adjust for efficiency (cost per ELO point)
-            if perf.cost_per_elo > 0:
-                efficiency_bonus = min(25, 100 / perf.cost_per_elo)  # Cap bonus
-            else:
-                efficiency_bonus = 25  # Free models get full efficiency bonus
-
-            final_rating = base_rating + consistency_bonus + win_rate_bonus + efficiency_bonus
-            ratings[perf.model_id] = max(0, final_rating)
-
-        return ratings
-
-    def get_comprehensive_ranking(self) -> List[Tuple[int, ModelPerformance, Dict[str, Any]]]:
-        """Get comprehensive ranking with multiple metrics."""
-        leaderboard = self.db.get_leaderboard(limit=100)
-        elo_ratings = self.calculate_elo_rating(leaderboard)
-
-        # Calculate additional metrics
-        rankings = []
-        for i, perf in enumerate(leaderboard):
-            metrics = {
-                'elo_rating': elo_ratings.get(perf.model_id, 0),
-                'efficiency_score': perf.efficiency_score,
-                'value_score': self._calculate_value_score(perf),
-                'consistency_rank': i + 1,  # Based on max ELO ranking
-                'trend': self._calculate_trend(perf),
-            }
-            rankings.append((i + 1, perf, metrics))
-
-        return rankings
-
-    def _calculate_value_score(self, perf: ModelPerformance) -> float:
-        """Calculate value score (performance per dollar)."""
-        if perf.total_cost <= 0:
-            return float('inf')  # Free models have infinite value
-
-        # Normalize performance metrics
-        performance_score = (
-            perf.max_elo * 0.4 +  # 40% weight on max ELO
-            perf.win_rate * 1000 * 0.3 +  # 30% weight on win rate
-            (1 - perf.consistency_score / 100) * 500 * 0.3  # 30% weight on consistency
+        raise NotImplementedError(
+            "Opponent settings cannot be converted to model Elo ratings"
         )
 
-        return performance_score / perf.total_cost
+    def get_comprehensive_ranking(self):
+        return [
+            (i + 1, perf, {})
+            for i, perf in enumerate(self.db.get_leaderboard(limit=100))
+        ]
 
     def _calculate_trend(self, perf: ModelPerformance) -> str:
         """Calculate performance trend from ELO history."""
@@ -441,50 +425,30 @@ class RankingSystem:
 
     def create_leaderboard_table(self, limit: int = 20) -> Table:
         """Create a beautiful leaderboard table."""
-        rankings = self.get_comprehensive_ranking()[:limit]
-
-        table = Table(title=f"🏆 Chess LLM Leaderboard (Top {limit})")
-        table.add_column("Rank", style="bold cyan", width=6)
-        table.add_column("Model", style="green", width=25)
-        table.add_column("Max ELO", style="yellow", justify="right", width=8)
-        table.add_column("Win Rate", style="blue", justify="right", width=8)
-        table.add_column("Games", style="magenta", justify="right", width=6)
-        table.add_column("Cost", style="red", justify="right", width=8)
-        table.add_column("Value", style="green", justify="right", width=10)
-        table.add_column("Trend", style="cyan", width=12)
-
-        for rank, perf, metrics in rankings:
-            # Format values
-            win_rate = f"{perf.win_rate:.1%}"
-            cost = f"${perf.total_cost:.3f}" if perf.total_cost > 0 else "Free"
-
-            if metrics['value_score'] == float('inf'):
-                value = "∞"
-            elif metrics['value_score'] > 1000:
-                value = f"{metrics['value_score']:.0f}"
-            else:
-                value = f"{metrics['value_score']:.1f}"
-
-            # Add medal emojis for top 3
-            rank_str = str(rank)
-            if rank == 1:
-                rank_str = "🥇 1"
-            elif rank == 2:
-                rank_str = "🥈 2"
-            elif rank == 3:
-                rank_str = "🥉 3"
-
-            table.add_row(
-                rank_str,
-                f"{perf.display_name}\n[dim]{perf.provider}[/dim]",
-                str(perf.max_elo),
-                win_rate,
-                str(perf.total_games),
-                cost,
-                value,
-                metrics['trend']
+        table = Table(title="Latest run only — descriptive results, not Elo ratings")
+        for column in (
+            "Model",
+            "Opponent setting",
+            "Completed",
+            "W / D / L",
+            "Score",
+            "Cost (USD)",
+        ):
+            table.add_column(column)
+        for _, perf, _ in self.get_comprehensive_ranking()[:limit]:
+            score = (
+                (perf.wins + 0.5 * perf.draws) / perf.total_games
+                if perf.total_games
+                else None
             )
-
+            table.add_row(
+                perf.display_name,
+                str(perf.max_elo),
+                str(perf.total_games),
+                f"{perf.wins} / {perf.draws} / {perf.losses}",
+                f"{score:.1%}" if score is not None else "—",
+                f"${perf.total_cost:.4f}",
+            )
         return table
 
     def create_provider_comparison_table(self) -> Table:
@@ -494,26 +458,24 @@ class RankingSystem:
         table = Table(title="📊 Provider Performance Comparison")
         table.add_column("Provider", style="cyan", width=15)
         table.add_column("Models", style="blue", justify="right", width=8)
-        table.add_column("Best ELO", style="yellow", justify="right", width=10)
-        table.add_column("Avg ELO", style="green", justify="right", width=10)
+        table.add_column("Highest opponent", style="yellow", justify="right", width=10)
+        table.add_column("Mean opponent", style="green", justify="right", width=10)
         table.add_column("Avg Cost", style="red", justify="right", width=10)
         table.add_column("Avg Win Rate", style="magenta", justify="right", width=12)
 
         # Sort by best ELO
         sorted_providers = sorted(
-            provider_stats.items(),
-            key=lambda x: x[1]['best_elo'],
-            reverse=True
+            provider_stats.items(), key=lambda x: x[1]["best_elo"], reverse=True
         )
 
         for provider, stats in sorted_providers:
             table.add_row(
                 provider.title(),
-                str(stats['model_count']),
-                str(int(stats['best_elo'])),
+                str(stats["model_count"]),
+                str(int(stats["best_elo"])),
                 f"{stats['avg_max_elo']:.0f}",
                 f"${stats['avg_cost']:.3f}",
-                f"{stats['avg_win_rate']:.1%}"
+                f"{stats['avg_win_rate']:.1%}",
             )
 
         return table
@@ -549,7 +511,7 @@ class RankingSystem:
                 "elo_progression": [h.max_elo for h in history],
                 "cost_progression": [h.total_cost for h in history],
                 "trend": self._calculate_trend(latest),
-            }
+            },
         }
 
         # Calculate statistics if multiple benchmarks
@@ -561,7 +523,9 @@ class RankingSystem:
                 "std_dev_elo": stdev(elos) if len(elos) > 1 else 0,
                 "best_performance": max(elos),
                 "worst_performance": min(elos),
-                "improvement_rate": (elos[-1] - elos[0]) / len(elos) if len(elos) > 1 else 0,
+                "improvement_rate": (
+                    (elos[-1] - elos[0]) / len(elos) if len(elos) > 1 else 0
+                ),
             }
 
         return analysis
@@ -572,7 +536,7 @@ def create_benchmark_record(
     timestamp: datetime,
     config: Dict[str, Any],
     results: BenchmarkResult,
-    budget_summary: Optional[BudgetSummary] = None
+    budget_summary: Optional[BudgetSummary] = None,
 ) -> BenchmarkRecord:
     """Create a benchmark record from results."""
 
@@ -580,24 +544,16 @@ def create_benchmark_record(
     total_cost = budget_summary.total_cost if budget_summary else 0.0
 
     for bot_name, ladder_stats in results.bot_results.items():
-        # Extract model info from the first bot spec in config
-        # This is a simplified approach - in practice, you'd want to store this mapping
-        provider = "unknown"
-        model_name = bot_name
+        from ..llm.client import parse_bot_spec
 
-        # Try to parse from bot specs if available
-        if 'bots' in config:
-            for bot_spec_str in config['bots'].split(','):
-                if bot_name in bot_spec_str:
-                    parts = bot_spec_str.split(':')
-                    if len(parts) >= 2:
-                        provider = parts[0]
-                        model_name = parts[1]
-                    break
+        bot = next(
+            bot for bot in parse_bot_spec(config["bots"]) if bot.name == bot_name
+        )
+        provider, model_name = bot.provider, bot.model
 
         # Calculate metrics
         total_games = ladder_stats.total_games
-        elo_history = [game.elo for game in ladder_stats.games]
+        elo_history = [game.elo for game in ladder_stats.games if game.completed]
         avg_elo = mean(elo_history) if elo_history else 0
 
         # Calculate consistency score (standard deviation of ELO)
@@ -610,9 +566,15 @@ def create_benchmark_record(
             improvement_rate = 0
 
         # Get cost info from budget summary
-        bot_cost = budget_summary.costs_by_bot.get(bot_name, 0.0) if budget_summary else 0.0
+        bot_cost = (
+            budget_summary.costs_by_bot.get(bot_name, 0.0) if budget_summary else 0.0
+        )
         cost_per_game = bot_cost / total_games if total_games > 0 else 0.0
-        cost_per_elo = bot_cost / ladder_stats.max_elo_reached if ladder_stats.max_elo_reached > 0 else 0.0
+        cost_per_elo = (
+            bot_cost / ladder_stats.max_elo_reached
+            if ladder_stats.max_elo_reached > 0
+            else 0.0
+        )
 
         model_perf = ModelPerformance(
             model_id=f"{provider}:{model_name}",
@@ -630,13 +592,14 @@ def create_benchmark_record(
             loss_rate=ladder_stats.loss_rate,
             consistency_score=consistency_score,
             improvement_rate=improvement_rate,
+            avg_time_per_game=ladder_stats.average_game_duration,
             total_cost=bot_cost,
             cost_per_game=cost_per_game,
             cost_per_elo=cost_per_elo,
             elo_history=elo_history,
             first_seen=timestamp,
             last_seen=timestamp,
-            benchmark_count=1
+            benchmark_count=1,
         )
 
         models.append(model_perf)
@@ -648,8 +611,12 @@ def create_benchmark_record(
         models=models,
         total_games=results.total_games,
         total_cost=total_cost,
-        duration=timedelta(seconds=0),  # Would need to track this during benchmark
-        version="0.3.0"
+        duration=(
+            budget_summary.duration
+            if budget_summary and budget_summary.duration
+            else timedelta(0)
+        ),
+        version="0.4.0",
     )
 
 
@@ -663,7 +630,7 @@ def get_results_db(db_path: Optional[Path] = None) -> ResultsDatabase:
     global _results_db
     if _results_db is None:
         if db_path is None:
-            db_path = Path("data/results.db")
+            db_path = Path("data/results-v2.db")
         _results_db = ResultsDatabase(db_path)
     return _results_db
 
@@ -681,12 +648,15 @@ def store_benchmark_results(
     timestamp: datetime,
     config: Dict[str, Any],
     results: BenchmarkResult,
-    budget_summary: Optional[BudgetSummary] = None
+    budget_summary: Optional[BudgetSummary] = None,
 ) -> None:
     """Store benchmark results in the database."""
     record = create_benchmark_record(run_id, timestamp, config, results, budget_summary)
     db = get_results_db()
     db.store_benchmark(record)
+    from ..llm.client import parse_bot_spec
+
+    db.store_games(results, parse_bot_spec(config["bots"]))
 
 
 def show_leaderboard(limit: int = 20) -> None:
@@ -731,7 +701,7 @@ def analyze_model(model_id: str) -> None:
     info_text = f"""
     🤖 {info['display_name']}
     📡 Provider: {info['provider'].title()}
-    🏆 Max ELO: {current['max_elo']}
+    Highest opponent setting: {current['max_elo']}
     📊 Win Rate: {current['win_rate']:.1%}
     🎮 Games Played: {current['total_games']}
     💰 Total Cost: ${efficiency['total_cost']:.4f}
@@ -739,20 +709,30 @@ def analyze_model(model_id: str) -> None:
     ⭐ Rating: {current['performance_rating']}
     """
 
-    console.print(Panel(info_text.strip(), title=f"Model Analysis: {info['display_name']}", border_style="blue"))
+    console.print(
+        Panel(
+            info_text.strip(),
+            title=f"Model Analysis: {info['display_name']}",
+            border_style="blue",
+        )
+    )
 
     # Statistics if available
     if "statistics" in analysis:
         stats = analysis["statistics"]
         stats_text = f"""
-        📈 Mean ELO: {stats['mean_elo']:.0f}
-        📊 Median ELO: {stats['median_elo']:.0f}
-        📏 Std Dev: {stats['std_dev_elo']:.1f}
+        Mean opponent setting: {stats['mean_elo']:.0f}
+        Median opponent setting: {stats['median_elo']:.0f}
+        Opponent setting std dev: {stats['std_dev_elo']:.1f}
         🏅 Best: {stats['best_performance']}
         📉 Worst: {stats['worst_performance']}
         🚀 Improvement Rate: {stats['improvement_rate']:.1f}/benchmark
         """
 
-        console.print(Panel(stats_text.strip(), title="Historical Statistics", border_style="green"))
+        console.print(
+            Panel(
+                stats_text.strip(), title="Historical Statistics", border_style="green"
+            )
+        )
 
     console.print("\n")

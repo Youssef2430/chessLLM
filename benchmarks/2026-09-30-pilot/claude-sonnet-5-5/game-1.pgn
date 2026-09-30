@@ -1,0 +1,15 @@
+[Event "Chess LLM · protocol 3"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "1"]
+[White "claude-sonnet-5-5"]
+[Black "Stockfish (1320)"]
+[Result "1-0"]
+[Opening "King's Indian Defense"]
+[ECO "E60"]
+[Protocol "3-subscription"]
+[ReasoningEffort "high"]
+[Termination "checkmate"]
+[Seed "42"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 c6 4. e4 d6 5. Nf3 Nbd7 6. Be2 a5 7. O-O Qc7 8. Re1 Bg7 9. Be3 e5 10. d5 O-O 11. Nd2 Nc5 12. Bxc5 Nd7 13. Be3 Nc5 14. Nb3 Nd7 15. a4 Nc5 16. Nxc5 Qe7 17. Nb3 Qh4 18. g3 Qf6 19. Qd2 Qe7 20. c5 Qd7 21. Bh6 Bxh6 22. Qxh6 dxc5 23. Nxc5 Qc7 24. Bc4 Bg4 25. Nd3 Qd6 26. h3 b5 27. hxg4 bxc4 28. Nc1 f5 29. gxf5 cxd5 30. fxg6 Rxf2 31. Qxh7+ Kf8 32. Kxf2 Qb6+ 33. Re3 Ke8 34. Qh8+ Kd7 35. Qxa8 Qd6 36. Qxd5 Qxd5 37. Nxd5 Kd6 38. g7 Kc6 39. g8=Q Kc5 40. Nb3+ Kd6 41. Qd8+ Kc6 42. Qc7# 1-0

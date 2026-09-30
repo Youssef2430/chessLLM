@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class EngineError(Exception):
     """Custom exception for engine-related errors."""
+
     pass
 
 
@@ -79,9 +80,10 @@ class ChessEngine:
             await self._detect_engine_capabilities()
 
             # Log engine details to the report file
-            await self._log_engine_report()
+            # Run metadata is persisted by the orchestrator.
 
         except Exception as e:
+            await self.stop()
             raise EngineError(f"Failed to start engine at {self.engine_path}: {e}")
 
     async def stop(self) -> None:
@@ -112,82 +114,25 @@ class ChessEngine:
         if not self._engine:
             raise EngineError("Engine not started")
 
-        # Warn about ELO values below absolute minimum
-        MIN_ELO = 600
-        if elo < MIN_ELO:
-            logger.warning(f"⚠️  Requested ELO {elo} is below absolute minimum of {MIN_ELO}")
-            logger.warning(f"   Engine will attempt to configure at ELO {elo} but results may be unpredictable")
-            logger.warning(f"   Consider using ELO {MIN_ELO} or higher for reliable chess gameplay")
-
         if self._current_elo == elo:
-            return  # Already configured for this ELO
-
-        # Check if the requested ELO is in supported range
-        # For sub-1100 ELOs, we'll use skill levels, so be more permissive
-        if self._supported_elo_range:
-            min_elo, max_elo = self._supported_elo_range
-            if elo > max_elo:
-                raise EngineError(
-                    f"Requested ELO {elo} is above maximum supported {max_elo} "
-                    f"for engine {self._engine_name}"
-                )
-            elif elo < min_elo and elo < 400:
-                # Only reject extremely low ELOs that are unrealistic
-                raise EngineError(
-                    f"Requested ELO {elo} is below minimum realistic rating "
-                    f"for engine {self._engine_name}"
-                )
-            elif elo < min_elo:
-                logger.info(f"ELO {elo} is below native UCI_Elo range ({min_elo}-{max_elo}), will use skill levels")
-
-        effective_elo = elo
-        try:
-            # Try UCI_LimitStrength first (Stockfish standard)
-            await asyncio.to_thread(
-                self._engine.configure,
-                {"UCI_LimitStrength": True, "UCI_Elo": elo}
+            return
+        if not self._supported_elo_range:
+            raise EngineError(
+                "Engine must advertise UCI_Elo; uncalibrated skill mappings are disabled"
             )
-            self._current_elo = elo
-            self._effective_elo = elo
-            logger.debug(f"Configured engine for ELO {elo} using UCI_LimitStrength")
-
-        except chess_engine.EngineError:
-            # Fallback to Skill Level for engines that don't support UCI_Elo or for sub-1100 ELOs
-            try:
-                # Enhanced skill level mapping for better sub-1100 ELO differentiation
-                if elo < 600:
-                    skill_level = 0
-                elif elo < 800:
-                    skill_level = max(1, (elo - 500) // 50)  # 1-6 range
-                elif elo < 1100:
-                    skill_level = max(6, (elo - 600) // 40)  # 6-12 range
-                else:  # 1100+ range
-                    skill_level = max(12, min(20, (elo - 900) // 30))  # 12-20 range
-                await asyncio.to_thread(
-                    self._engine.configure,
-                    {"Skill Level": skill_level}
-                )
-                self._current_elo = elo
-                # Approximate the effective ELO based on skill level using reverse mapping
-                if skill_level == 0:
-                    self._effective_elo = 500  # Very low ELO
-                elif skill_level <= 6:
-                    self._effective_elo = 500 + skill_level * 50  # 550-800 range
-                elif skill_level <= 12:
-                    self._effective_elo = 600 + (skill_level - 6) * 40  # 640-840 range, adjusted to ~800-1100
-                else:
-                    self._effective_elo = 900 + (skill_level - 12) * 30  # 900+ range
-                effective_elo = self._effective_elo
-                logger.debug(f"Configured engine for ELO {elo} using Skill Level {skill_level} (effective: ~{effective_elo})")
-
-            except Exception as e:
-                logger.warning(f"Could not configure engine strength: {e}")
-                # Continue without strength limitation
-                self._current_elo = elo
-                self._effective_elo = None
-
-        # Update engine report with the newly configured ELO
-        await self._update_engine_report(requested_elo=elo, effective_elo=effective_elo)
+        minimum, maximum = self._supported_elo_range
+        if not minimum <= elo <= maximum:
+            raise EngineError(
+                f"Requested ELO {elo} outside native UCI_Elo range {minimum}-{maximum}"
+            )
+        try:
+            await asyncio.to_thread(
+                self._engine.configure, {"UCI_LimitStrength": True, "UCI_Elo": elo}
+            )
+        except Exception as exc:
+            raise EngineError(f"Could not configure UCI_Elo {elo}") from exc
+        self._current_elo = elo
+        self._effective_elo = elo
 
     async def get_move(self, board: chess.Board) -> chess.Move:
         """
@@ -216,7 +161,8 @@ class ChessEngine:
             result = await asyncio.to_thread(
                 self._engine.play,
                 board,
-                chess_engine.Limit(time=move_time)
+                chess_engine.Limit(time=move_time),
+                game=board.root().fen() + str(id(board)),
             )
 
             if not result.move:
@@ -228,7 +174,9 @@ class ChessEngine:
         except Exception as e:
             raise EngineError(f"Engine move generation failed: {e}")
 
-    async def analyze_position(self, board: chess.Board, depth: int = 10) -> Dict[str, Any]:
+    async def analyze_position(
+        self, board: chess.Board, depth: int = 10
+    ) -> Dict[str, Any]:
         """
         Analyze a chess position and return evaluation info.
 
@@ -244,9 +192,7 @@ class ChessEngine:
 
         try:
             info = await asyncio.to_thread(
-                self._engine.analyse,
-                board,
-                chess_engine.Limit(depth=depth)
+                self._engine.analyse, board, chess_engine.Limit(depth=depth)
             )
 
             result = {
@@ -320,7 +266,9 @@ class ChessEngine:
                 uci_elo = options["UCI_Elo"]
                 if hasattr(uci_elo, "min") and hasattr(uci_elo, "max"):
                     self._supported_elo_range = (uci_elo.min, uci_elo.max)
-                    logger.info(f"Engine supports ELO range: {uci_elo.min}-{uci_elo.max}")
+                    logger.info(
+                        f"Engine supports ELO range: {uci_elo.min}-{uci_elo.max}"
+                    )
             elif "Skill Level" in options:
                 # Approximate ELO range based on skill level
                 skill_option = options["Skill Level"]
@@ -328,7 +276,9 @@ class ChessEngine:
                     min_elo = 1000 + skill_option.min * 50
                     max_elo = 1000 + skill_option.max * 50
                     self._supported_elo_range = (min_elo, max_elo)
-                    logger.info(f"Engine supports approximate ELO range: {min_elo}-{max_elo} (via Skill Level)")
+                    logger.info(
+                        f"Engine supports approximate ELO range: {min_elo}-{max_elo} (via Skill Level)"
+                    )
 
             # For engine-specific capabilities
             if "maia" in self._engine_name.lower():
@@ -338,7 +288,9 @@ class ChessEngine:
                     band_min = maia_level - 100
                     band_max = maia_level + 100
                     self._supported_elo_range = (band_min, band_max)
-                    logger.info(f"Maia model trained on {maia_level} ELO band (effective range: {band_min}-{band_max})")
+                    logger.info(
+                        f"Maia model trained on {maia_level} ELO band (effective range: {band_min}-{band_max})"
+                    )
 
         except Exception as e:
             logger.warning(f"Failed to detect engine capabilities: {e}")
@@ -355,17 +307,32 @@ class ChessEngine:
                     "version": self._engine_version,
                     "type": self.engine_type,
                     "path": self.engine_path,
-                    "supported_elo_range": list(self._supported_elo_range) if self._supported_elo_range else None,
-                    "options": [{
-                        "name": name,
-                        "type": getattr(option, "type", "unknown"),
-                        "default": getattr(option, "default", None),
-                        "min": getattr(option, "min", None) if hasattr(option, "min") else None,
-                        "max": getattr(option, "max", None) if hasattr(option, "max") else None,
-                    } for name, option in self._engine_options.items()]
+                    "supported_elo_range": (
+                        list(self._supported_elo_range)
+                        if self._supported_elo_range
+                        else None
+                    ),
+                    "options": [
+                        {
+                            "name": name,
+                            "type": getattr(option, "type", "unknown"),
+                            "default": getattr(option, "default", None),
+                            "min": (
+                                getattr(option, "min", None)
+                                if hasattr(option, "min")
+                                else None
+                            ),
+                            "max": (
+                                getattr(option, "max", None)
+                                if hasattr(option, "max")
+                                else None
+                            ),
+                        }
+                        for name, option in self._engine_options.items()
+                    ],
                 },
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "configurations": []
+                "configurations": [],
             }
 
             # Ensure the meta directory exists
@@ -374,7 +341,7 @@ class ChessEngine:
 
             # Save the report
             report_file = meta_dir / "opponent_report.json"
-            with open(report_file, 'w') as f:
+            with open(report_file, "w") as f:
                 json.dump(report, f, indent=2)
 
             logger.info(f"Engine report saved to {report_file}")
@@ -382,7 +349,9 @@ class ChessEngine:
         except Exception as e:
             logger.warning(f"Failed to save engine report: {e}")
 
-    async def _update_engine_report(self, requested_elo: int, effective_elo: Optional[int] = None) -> None:
+    async def _update_engine_report(
+        self, requested_elo: int, effective_elo: Optional[int] = None
+    ) -> None:
         """
         Update the engine report with new ELO configuration.
 
@@ -398,7 +367,7 @@ class ChessEngine:
                 await self._log_engine_report()
 
             # Load existing report
-            with open(report_file, 'r') as f:
+            with open(report_file, "r") as f:
                 report = json.load(f)
 
             # Add new configuration
@@ -406,7 +375,7 @@ class ChessEngine:
                 "requested_elo": requested_elo,
                 "effective_elo": effective_elo or requested_elo,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "options_used": {}
+                "options_used": {},
             }
 
             # Add key configuration options used
@@ -414,7 +383,11 @@ class ChessEngine:
                 config_entry["options_used"]["UCI_LimitStrength"] = True
             if "UCI_Elo" in self._engine_options:
                 config_entry["options_used"]["UCI_Elo"] = requested_elo
-            if "Skill Level" in self._engine_options and effective_elo and effective_elo != requested_elo:
+            if (
+                "Skill Level" in self._engine_options
+                and effective_elo
+                and effective_elo != requested_elo
+            ):
                 skill_level = max(0, min(20, (requested_elo - 1000) // 50))
                 config_entry["options_used"]["Skill Level"] = skill_level
 
@@ -422,7 +395,7 @@ class ChessEngine:
             report["configurations"].append(config_entry)
 
             # Save the updated report
-            with open(report_file, 'w') as f:
+            with open(report_file, "w") as f:
                 json.dump(report, f, indent=2)
 
         except Exception as e:
@@ -501,7 +474,7 @@ def validate_engine(engine_path: str) -> bool:
             input="uci\nquit\n",
             text=True,
             capture_output=True,
-            timeout=5
+            timeout=5,
         )
 
         # Check if engine responds with "uciok"
@@ -530,10 +503,10 @@ def get_engine_info(engine_path: str) -> Dict[str, str]:
             input="uci\nquit\n",
             text=True,
             capture_output=True,
-            timeout=5
+            timeout=5,
         )
 
-        for line in result.stdout.split('\n'):
+        for line in result.stdout.split("\n"):
             if line.startswith("id name "):
                 info["name"] = line[8:].strip()
             elif line.startswith("id author "):
@@ -550,8 +523,9 @@ def get_engine_info(engine_path: str) -> Dict[str, str]:
     return info
 
 
-def create_engine(config: Config, engine_path: Optional[str] = None,
-                  engine_type: Optional[str] = None) -> Union[ChessEngine, 'AdaptiveEngine']:
+def create_engine(
+    config: Config, engine_path: Optional[str] = None, engine_type: Optional[str] = None
+) -> Union[ChessEngine, "AdaptiveEngine"]:
     """
     Factory function to create the appropriate chess engine based on configuration.
 
@@ -574,39 +548,54 @@ def create_engine(config: Config, engine_path: Optional[str] = None,
         if engine_type == "stockfish":
             stockfish_path = engine_path or autodetect_stockfish(config.stockfish_path)
             if not stockfish_path:
-                raise EngineError("Stockfish not found. Please install it or specify the path.")
+                raise EngineError(
+                    "Stockfish not found. Please install it or specify the path."
+                )
             return ChessEngine(stockfish_path, config)
         elif engine_type in ("maia", "lczero", "human_stockfish"):
             from .human_engine import get_best_human_engine, create_human_engine
+
             # Either use provided path or auto-detect
             if engine_path:
                 if not Path(engine_path).exists():
-                    raise EngineError(f"{engine_type.capitalize()} engine not found at specified path: {engine_path}")
+                    raise EngineError(
+                        f"{engine_type.capitalize()} engine not found at specified path: {engine_path}"
+                    )
                 return create_human_engine(engine_type, engine_path, config)
             else:
                 best_engine = get_best_human_engine(preferred_type=engine_type)
                 if best_engine:
                     detected_type, detected_path = best_engine
                     if not detected_path:
-                        raise EngineError(f"{engine_type.capitalize()} engine detected but path is invalid")
+                        raise EngineError(
+                            f"{engine_type.capitalize()} engine detected but path is invalid"
+                        )
                     return create_human_engine(detected_type, detected_path, config)
-                raise EngineError(f"{engine_type.capitalize()} engine not found. Please install it or specify the path.")
+                raise EngineError(
+                    f"{engine_type.capitalize()} engine not found. Please install it or specify the path."
+                )
         elif engine_type in ("texel", "madchess", "toga"):
             # Try to find the specified low-ELO engine
             detected_path = autodetect_engine(engine_type)
             if detected_path and Path(detected_path).exists():
                 return ChessEngine(detected_path, config)
-            raise EngineError(f"{engine_type.capitalize()} engine not found. Please install it or specify the path.")
+            raise EngineError(
+                f"{engine_type.capitalize()} engine not found. Please install it or specify the path."
+            )
         else:
-            logger.warning(f"Unknown engine type '{engine_type}', falling back to standard behavior")
+            logger.warning(
+                f"Unknown engine type '{engine_type}', falling back to standard behavior"
+            )
 
     # If adaptive_elo_engines is enabled, create an adaptive engine
-    if getattr(config, 'adaptive_elo_engines', True):
+    if getattr(config, "adaptive_elo_engines", True):
         try:
             engine = AdaptiveEngine(config)
             return engine
         except Exception as e:
-            logger.warning(f"Failed to create adaptive engine: {e}. Falling back to standard engine.")
+            logger.warning(
+                f"Failed to create adaptive engine: {e}. Falling back to standard engine."
+            )
 
     # Otherwise create a standard engine (either human-like or stockfish)
     if config.use_human_engine:
@@ -662,7 +651,7 @@ def autodetect_engine(engine_name: str) -> Optional[str]:
         f"C:/{engine_name}/{engine_name}.exe",
         f"/usr/games/{engine_name}",
         f"{os.path.expanduser('~')}/.local/bin/{engine_name}",
-        f"{os.path.expanduser('~')}/chess_engines/{engine_name}/{engine_name}"
+        f"{os.path.expanduser('~')}/chess_engines/{engine_name}/{engine_name}",
     ]
 
     for path in common_paths:
@@ -686,11 +675,11 @@ def extract_engine_version(engine_name: str) -> str:
 
     # Common version patterns
     patterns = [
-        r'(\d+\.\d+\.\d+)',  # Format: X.Y.Z
-        r'(\d+\.\d+)',       # Format: X.Y
-        r'v(\d+\.\d+\.\d+)', # Format: vX.Y.Z
-        r'v(\d+\.\d+)',      # Format: vX.Y
-        r'(\d+)'             # Just a number
+        r"(\d+\.\d+\.\d+)",  # Format: X.Y.Z
+        r"(\d+\.\d+)",  # Format: X.Y
+        r"v(\d+\.\d+\.\d+)",  # Format: vX.Y.Z
+        r"v(\d+\.\d+)",  # Format: vX.Y
+        r"(\d+)",  # Just a number
     ]
 
     for pattern in patterns:
@@ -715,8 +704,8 @@ def extract_maia_level(engine_name: str) -> Optional[int]:
 
     # Patterns for Maia model names (e.g., "maia-1900")
     patterns = [
-        r'maia[_-](\d{3,4})',  # Format: maia-1900 or maia_1900
-        r'(\d{3,4})'           # Just look for a 3-4 digit number
+        r"maia[_-](\d{3,4})",  # Format: maia-1900 or maia_1900
+        r"(\d{3,4})",  # Just look for a 3-4 digit number
     ]
 
     for pattern in patterns:

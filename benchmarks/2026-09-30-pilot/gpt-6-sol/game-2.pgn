@@ -1,0 +1,15 @@
+[Event "Chess LLM · protocol 3"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "2"]
+[White "Stockfish (1320)"]
+[Black "gpt-6-sol"]
+[Result "*"]
+[Opening "King's Indian Defense"]
+[ECO "E60"]
+[Protocol "3-subscription"]
+[ReasoningEffort "high"]
+[Termination "max_plies"]
+[Seed "43"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 d5 4. Bg5 Ne4 5. h4 Nxg5 6. cxd5 e6 7. Qa4+ Bd7 8. Qb3 Nh3 9. gxh3 Qxh4 10. e3 b6 11. Nf3 Qh5 12. Ne5 Bg7 13. Nxd7 Kxd7 14. dxe6+ fxe6 15. h4 Nc6 16. Bh3 Rae8 17. Qc4 Na5 18. Qa6 Qxh4 19. Qe2 Nc6 20. O-O-O Nxd4 21. Bxe6+ Rxe6 22. Rxd4+ Qxd4 23. Re1 Qf6 24. Qb5+ c6 25. Qa4 Qxf2 26. Qd1+ Kc7 27. Re2 Qxe3+ 28. Rxe3 Rxe3 29. Qd2 Rhe8 30. Qh2+ R8e5 31. Qf4 g5 32. Qa4 Ra5 33. Qc4 Bxc3 34. a3 Re1+ 35. Kc2 Rc5 36. Qf7+ Kc8 37. Qxa7 Re2+ 38. Kd1 Rd5+ 39. Kxe2 Rd2+ 40. Kf3 Rd7 41. Qa6+ Rb7 42. Qa8+ Rb8 43. Qxc6+ Kd8 44. Qd6+ Kc8 45. Qe6+ Kd8 46. Qg8+ Kc7 47. Qf7+ Kd6 48. Qb3 Rf8+ 49. Kg4 Bf6 50. Qb4+ Ke5 51. Qxf8 Ke6 52. Qe8+ Kd6 53. Qe4 Kd7 54. Qxh7+ Be7 55. Qf7 Kd6 56. Qh5 Bf6 57. Qh2+ Be5 58. Qh6+ Kd5 59. Qxb6 Bf4 60. a4 Ke5 61. Qc5+ Ke4 62. a5 Be3 63. Qb5 Bf4 64. Qc6+ Kd3 65. Qc5 Ke4 66. Qf5+ Ke3 67. Qb5 Kd4 68. Qd7+ Ke3 69. Qb5 Kd4 70. a6 Bb8 71. Qe8 Ba7 72. Qd7+ Kc4 73. Kf5 Bc5 74. Qc6 Kb4 75. Qb7+ Ka5 76. a7 Bxa7 77. Qc7+ Bb6 78. Qc4 Bd8 79. Qc3+ Kb5 80. Qe5+ Kc4 81. Qe6+ Kb5 82. Qd7+ Kb4 83. Qd4+ Kb3 84. Qxd8 Kxb2 85. Ke5 g4 86. Ke4 g3 87. Kd3 g2 88. Qb6+ Ka3 89. Qg1 Kb4 90. Ke2 Kb5 91. Kd3 Kb4 92. Qe1+ Kb5 93. Qg3 Kb6 94. Qe3+ Kc6 95. Qg1 Kd6 96. Kd2 Ke5 97. Ke3 Kf6 98. Kd2 Ke5 99. Kd3 Kf6 100. Ke2 Ke5 *

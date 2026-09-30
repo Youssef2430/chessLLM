@@ -1,0 +1,15 @@
+[Event "Chess LLM · protocol 3"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "2"]
+[White "Stockfish (1320)"]
+[Black "gemini-3.8-flash"]
+[Result "0-1"]
+[Opening "King's Indian Defense"]
+[ECO "E60"]
+[Protocol "3-subscription"]
+[ReasoningEffort "high"]
+[Termination "checkmate"]
+[Seed "43"]
+
+1. d4 Nf6 2. c4 g6 3. e3 Bg7 4. Be2 O-O 5. h3 d5 6. cxd5 Nxd5 7. Nf3 c5 8. O-O cxd4 9. Nxd4 e5 10. Nb3 Nc6 11. Re1 Be6 12. Nc5 Qe7 13. Ne4 Rfd8 14. Nbd2 f5 15. Nc3 Nxc3 16. bxc3 e4 17. Rb1 Bxc3 18. Qc2 Bg7 19. Bc4 Ne5 20. Bxe6+ Qxe6 21. Qa4 Nd3 22. Rf1 Nxc1 23. Qc2 Rac8 24. Rfxc1 Rxc2 25. Rxc2 b6 26. g3 f4 27. Rbc1 Qxh3 28. exf4 e3 29. fxe3 Qxg3+ 30. Kf1 Qxe3 31. Rc8 Qxd2 32. R1c6 Bd4 33. Rxg6+ hxg6 34. f5 Qf2# 0-1

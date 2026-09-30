@@ -1,0 +1,78 @@
+{
+  "currency": "USD",
+  "pricing_checked": "2026-09-29",
+  "sources": {
+    "openai": "https://developers.openai.com/api/docs/pricing",
+    "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "gemini": "https://ai.google.dev/gemini-api/docs/pricing"
+  },
+  "assumptions": {
+    "games_per_model": 10,
+    "llm_moves_per_game": 60,
+    "input_tokens_per_request": 800,
+    "output_tokens_including_reasoning": 512,
+    "max_output_tokens": 2048,
+    "max_plies": 200,
+    "mode": "prompt",
+    "requests_per_move": 1
+  },
+  "models": [
+    {
+      "bot": "GPT-6 Astra",
+      "model": "openai:gpt-6-astra",
+      "games": 10,
+      "scenario_usd": 20.160000000000004,
+      "high_scenario_usd": 118.4,
+      "input_usd_per_million": 10.0,
+      "output_usd_per_million": 50.0
+    },
+    {
+      "bot": "GPT-6 Luna",
+      "model": "openai:gpt-6-luna",
+      "games": 10,
+      "scenario_usd": 0.20159999999999997,
+      "high_scenario_usd": 1.184,
+      "input_usd_per_million": 0.1,
+      "output_usd_per_million": 0.5
+    },
+    {
+      "bot": "Claude Sonnet 5.5",
+      "model": "anthropic:claude-sonnet-5-5",
+      "games": 10,
+      "scenario_usd": 4.032,
+      "high_scenario_usd": 23.680000000000003,
+      "input_usd_per_million": 2.0,
+      "output_usd_per_million": 10.0
+    },
+    {
+      "bot": "Claude Haiku 4.5",
+      "model": "anthropic:claude-haiku-4-5-20251001",
+      "games": 10,
+      "scenario_usd": 2.016,
+      "high_scenario_usd": 11.840000000000002,
+      "input_usd_per_million": 1.0,
+      "output_usd_per_million": 5.0
+    },
+    {
+      "bot": "Gemini 3.8 Flash",
+      "model": "gemini:gemini-3.8-flash",
+      "games": 10,
+      "scenario_usd": 1.512,
+      "high_scenario_usd": 8.88,
+      "input_usd_per_million": 0.75,
+      "output_usd_per_million": 3.75
+    },
+    {
+      "bot": "Gemini 3.5 Flash Lite",
+      "model": "gemini:gemini-3.5-flash-lite",
+      "games": 10,
+      "scenario_usd": 0.912,
+      "high_scenario_usd": 5.6000000000000005,
+      "input_usd_per_million": 0.3,
+      "output_usd_per_million": 2.5
+    }
+  ],
+  "scenario_usd": 28.833600000000004,
+  "high_scenario_usd": 169.584,
+  "note": "Scenarios, not quotes or guaranteed upper bounds. No cache discounts, tax, credits, retries or regional premiums. Flash promotional rates expire 2026-12-31."
+}

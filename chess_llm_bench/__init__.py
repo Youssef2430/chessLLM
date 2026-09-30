@@ -1,19 +1,21 @@
-"""
-Chess LLM Benchmark - A tool for testing LLMs with chess games and assessing their ELOs.
+"""Chess benchmarks with explicit outcomes, move analysis and usage telemetry.
 
-This package provides a framework for running chess games between Large Language Models
-and Stockfish at various ELO ratings, creating a ladder system to evaluate LLM
-chess-playing capabilities.
+Opponent UCI_Elo settings do not establish an LLM Elo rating.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"
 __author__ = "Chess LLM Bench Team"
 __license__ = "MIT"
 
 # Core imports
 from .core.models import BotSpec, GameRecord, LadderStats, LiveState
 from .core.engine import ChessEngine
-from .core.human_engine import HumanLikeEngine, MaiaEngine, LeelaEngine, HumanStockfishEngine
+from .core.human_engine import (
+    HumanLikeEngine,
+    MaiaEngine,
+    LeelaEngine,
+    HumanStockfishEngine,
+)
 from .core.game import GameRunner
 from .llm.client import LLMClient
 from .ui.dashboard import Dashboard

@@ -37,7 +37,9 @@ class Dashboard:
     simultaneously, including board states, statistics, and ladder progression.
     """
 
-    def __init__(self, console: Optional[Console] = None, config: Optional[Config] = None):
+    def __init__(
+        self, console: Optional[Console] = None, config: Optional[Config] = None
+    ):
         """
         Initialize the dashboard.
 
@@ -49,8 +51,7 @@ class Dashboard:
         self.config = config or Config()
         self._live: Optional[Live] = None
         self.board_renderer = ChessBoardRenderer(
-            theme=BoardTheme.UNICODE,
-            show_coordinates=True
+            theme=BoardTheme.UNICODE, show_coordinates=True
         )
 
     def start_live_display(self) -> Live:
@@ -68,7 +69,7 @@ class Dashboard:
             self._create_empty_display(),
             console=self.console,
             refresh_per_second=self.config.refresh_rate,
-            auto_refresh=True
+            auto_refresh=True,
         )
         return self._live
 
@@ -82,7 +83,9 @@ class Dashboard:
             finally:
                 self._live = None
 
-    def update_display(self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]) -> None:
+    def update_display(
+        self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]
+    ) -> None:
         """
         Update the live display with current states and statistics.
 
@@ -107,8 +110,9 @@ class Dashboard:
         except Exception as e:
             logger.error(f"Error updating dashboard: {e}")
 
-
-    def render_dashboard(self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]) -> Panel:
+    def render_dashboard(
+        self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]
+    ) -> Panel:
         """
         Render the complete dashboard layout.
 
@@ -142,7 +146,7 @@ class Dashboard:
             # For more than 2 bots, arrange in rows
             rows = []
             for i in range(0, len(bot_panels), 2):
-                row_panels = bot_panels[i:i+2]
+                row_panels = bot_panels[i : i + 2]
                 if len(row_panels) == 1:
                     rows.append(row_panels[0])
                 else:
@@ -156,34 +160,39 @@ class Dashboard:
             full_content = Group(main_content, summary_panel)
 
         # Determine appropriate title based on mode
-        if self.config and hasattr(self.config, 'fixed_opponent_elo') and self.config.fixed_opponent_elo is not None:
+        if (
+            self.config
+            and hasattr(self.config, "fixed_opponent_elo")
+            and self.config.fixed_opponent_elo is not None
+        ):
             if self.config.fixed_opponent_elo == 0:
                 title = "🏆 Chess LLM vs Random Opponent"
             else:
                 title = f"🏆 Chess LLM vs ELO {self.config.fixed_opponent_elo}"
         else:
             title = "🏆 Chess LLM ELO Ladder Benchmark"
-        
+
         return Panel(
             full_content,
             title=title,
             title_align="center",
             border_style="magenta",
-            padding=(1, 2)
+            padding=(1, 2),
         )
 
     def _render_bot_panel(
-        self,
-        bot_name: str,
-        state: LiveState,
-        stats: Optional[LadderStats]
+        self, bot_name: str, state: LiveState, stats: Optional[LadderStats]
     ) -> Panel:
         """Render an individual bot's status panel."""
         # Header with bot name and ladder/fixed mode
         header = Text(f"{bot_name}", style="bold cyan")
-        
+
         # Check if we're in fixed ELO mode
-        if self.config and hasattr(self.config, 'fixed_opponent_elo') and self.config.fixed_opponent_elo is not None:
+        if (
+            self.config
+            and hasattr(self.config, "fixed_opponent_elo")
+            and self.config.fixed_opponent_elo is not None
+        ):
             if self.config.fixed_opponent_elo == 0:
                 ladder_display = "Fixed Opponent: Random"
             else:
@@ -195,16 +204,23 @@ class Dashboard:
         table = Table.grid(expand=True)
 
         # Board display (left column) - Beautiful Unicode chess board
-        if state.board_ascii and hasattr(state, '_chess_board') and state._chess_board is not None:
+        if (
+            state.board_ascii
+            and hasattr(state, "_chess_board")
+            and state._chess_board is not None
+        ):
             # Use the beautiful chess board renderer
             try:
-                last_move = chess.Move.from_uci(state.last_move_uci) if state.last_move_uci else None
+                last_move = (
+                    chess.Move.from_uci(state.last_move_uci)
+                    if state.last_move_uci
+                    else None
+                )
             except:
                 last_move = None
 
             board_panel = self.board_renderer.render_board(
-                state._chess_board,
-                last_move=last_move
+                state._chess_board, last_move=last_move
             )
 
             # Apply border style based on state
@@ -224,15 +240,13 @@ class Dashboard:
             else:
                 board_style = "green"
             board_panel = Panel(
-                Align.center(board_text),
-                border_style=board_style,
-                padding=(0, 1)
+                Align.center(board_text), border_style=board_style, padding=(0, 1)
             )
         else:
             board_panel = Panel(
                 Align.center(Text("🎯 Waiting for game...", style="dim cyan")),
                 border_style="blue",
-                padding=(0, 1)
+                padding=(0, 1),
             )
 
         # Status information (right column)
@@ -250,11 +264,13 @@ class Dashboard:
         # Statistics
         if stats:
             status_lines.append("")  # Separator
-            status_lines.append(f"Max ELO reached: {stats.max_elo_reached}")
+            status_lines.append(f"Highest opponent setting: {stats.max_elo_reached}")
             status_lines.append(f"Games played: {stats.total_games}")
             if stats.total_games > 0:
                 status_lines.append(f"Win rate: {stats.win_rate:.1%}")
-                status_lines.append(f"Wins: {stats.wins} | Draws: {stats.draws} | Losses: {stats.losses}")
+                status_lines.append(
+                    f"Wins: {stats.wins} | Draws: {stats.draws} | Losses: {stats.losses}"
+                )
 
             # Timing and move quality stats
             if stats.average_move_time > 0:
@@ -263,9 +279,15 @@ class Dashboard:
                 status_lines.append(f"Illegal moves: {stats.total_illegal_moves}")
 
         # Cost information if available
-        show_costs = self.config.show_costs if hasattr(self.config, 'show_costs') else False
+        show_costs = (
+            self.config.show_costs if hasattr(self.config, "show_costs") else False
+        )
         budget_tracker = get_budget_tracker()
-        has_costs = budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0
+        has_costs = (
+            budget_tracker
+            and budget_tracker.is_active
+            and budget_tracker.get_current_cost() > 0
+        )
 
         if show_costs or has_costs:
             try:
@@ -285,12 +307,15 @@ class Dashboard:
                 pass
 
         # Live timing stats during current game
-        if hasattr(state, 'average_move_time') and state.average_move_time > 0:
+        if hasattr(state, "average_move_time") and state.average_move_time > 0:
             status_lines.append("")
             status_lines.append(f"Current game avg: {state.average_move_time:.2f}s")
-            if hasattr(state, 'game_duration') and state.game_duration > 0:
+            if hasattr(state, "game_duration") and state.game_duration > 0:
                 status_lines.append(f"Game time: {state.game_duration:.2f}s")
-            if hasattr(state, 'illegal_move_attempts') and state.illegal_move_attempts > 0:
+            if (
+                hasattr(state, "illegal_move_attempts")
+                and state.illegal_move_attempts > 0
+            ):
                 status_lines.append(f"Current illegal: {state.illegal_move_attempts}")
 
         # Error handling
@@ -318,20 +343,14 @@ class Dashboard:
                     border_style = "yellow"
 
         return Panel(
-            Group(
-                header,
-                Text(ladder_display, style="dim"),
-                content_table
-            ),
+            Group(header, Text(ladder_display, style="dim"), content_table),
             title=bot_name,
             border_style=border_style,
-            padding=(1, 1)
+            padding=(1, 1),
         )
 
     def _render_summary_panel(
-        self,
-        states: Dict[str, LiveState],
-        stats: Dict[str, LadderStats]
+        self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]
     ) -> Panel:
         """Render a summary panel with overall statistics."""
         if len(states) <= 1:
@@ -341,7 +360,7 @@ class Dashboard:
         table = Table(expand=True)
         table.add_column("Bot", style="cyan", no_wrap=True)
         table.add_column("Status", style="white")
-        table.add_column("Max ELO", style="green", justify="right")
+        table.add_column("Opponent", style="green", justify="right")
         table.add_column("Games", style="blue", justify="right")
         table.add_column("Win Rate", style="yellow", justify="right")
         table.add_column("Record", style="dim", justify="center")
@@ -349,9 +368,15 @@ class Dashboard:
         table.add_column("Illegal Moves", style="red", justify="right")
 
         # Add cost column if costs are being tracked
-        show_costs = self.config.show_costs if hasattr(self.config, 'show_costs') else False
+        show_costs = (
+            self.config.show_costs if hasattr(self.config, "show_costs") else False
+        )
         budget_tracker = get_budget_tracker()
-        has_costs = budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0
+        has_costs = (
+            budget_tracker
+            and budget_tracker.is_active
+            and budget_tracker.get_current_cost() > 0
+        )
 
         if show_costs or has_costs:
             table.add_column("Cost", style="green", justify="right")
@@ -377,11 +402,23 @@ class Dashboard:
             # Statistics
             max_elo = str(bot_stats.max_elo_reached) if bot_stats else "0"
             games = str(bot_stats.total_games) if bot_stats else "0"
-            win_rate = f"{bot_stats.win_rate:.1%}" if bot_stats and bot_stats.total_games > 0 else "—"
-            record = f"{bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L" if bot_stats else "—"
+            win_rate = (
+                f"{bot_stats.win_rate:.1%}"
+                if bot_stats and bot_stats.total_games > 0
+                else "—"
+            )
+            record = (
+                f"{bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L"
+                if bot_stats
+                else "—"
+            )
 
             # Timing and illegal move statistics
-            avg_time = f"{bot_stats.average_move_time:.2f}s" if bot_stats and bot_stats.average_move_time > 0 else "—"
+            avg_time = (
+                f"{bot_stats.average_move_time:.2f}s"
+                if bot_stats and bot_stats.average_move_time > 0
+                else "—"
+            )
             illegal_moves = str(bot_stats.total_illegal_moves) if bot_stats else "0"
 
             # Get cost for this bot if available
@@ -389,7 +426,9 @@ class Dashboard:
             if show_costs or has_costs:
                 try:
                     if budget_tracker and budget_tracker.summary.costs_by_bot:
-                        cost_value = budget_tracker.summary.costs_by_bot.get(bot_name, 0.0)
+                        cost_value = budget_tracker.summary.costs_by_bot.get(
+                            bot_name, 0.0
+                        )
                         bot_cost = f"${cost_value:.3f}" if cost_value > 0 else "$0.000"
                 except Exception:
                     bot_cost = "—"
@@ -403,7 +442,7 @@ class Dashboard:
                 win_rate,
                 record,
                 avg_time,
-                illegal_moves
+                illegal_moves,
             ]
 
             if show_costs or has_costs:
@@ -435,7 +474,9 @@ class Dashboard:
                     cost_line.append(f"${current_cost:.4f}", style=cost_style)
 
                     if budget_tracker.budget_limit:
-                        cost_line.append(f" / ${budget_tracker.budget_limit:.2f}", style="dim")
+                        cost_line.append(
+                            f" / ${budget_tracker.budget_limit:.2f}", style="dim"
+                        )
                         usage_pct = (current_cost / budget_tracker.budget_limit) * 100
                         cost_line.append(f" ({usage_pct:.1f}%)", style=cost_style)
 
@@ -449,7 +490,9 @@ class Dashboard:
 
                         if current_cost > 0:
                             avg_cost = current_cost / total_requests
-                            calls_line.append(f"  |  Avg: ${avg_cost:.4f}/call", style="dim")
+                            calls_line.append(
+                                f"  |  Avg: ${avg_cost:.4f}/call", style="dim"
+                            )
 
                         budget_lines.append(calls_line)
 
@@ -457,8 +500,10 @@ class Dashboard:
                         budget_panel = Panel(
                             Group(*budget_lines),
                             title="💰 Budget Tracking",
-                            border_style="green" if cost_style == "green" else cost_style,
-                            padding=(0, 1)
+                            border_style=(
+                                "green" if cost_style == "green" else cost_style
+                            ),
+                            padding=(0, 1),
                         )
             except Exception:
                 # Ignore budget display errors to not break the dashboard
@@ -471,16 +516,11 @@ class Dashboard:
             final_content = table
 
         return Panel(
-            final_content,
-            title="📊 Summary",
-            border_style="blue",
-            padding=(0, 1)
+            final_content, title="📊 Summary", border_style="blue", padding=(0, 1)
         )
 
     def _render_single_bot_summary(
-        self,
-        states: Dict[str, LiveState],
-        stats: Dict[str, LadderStats]
+        self, states: Dict[str, LiveState], stats: Dict[str, LadderStats]
     ) -> Panel:
         """Render summary for single bot runs."""
         if not states:
@@ -498,16 +538,26 @@ class Dashboard:
             summary_lines.append("🎮 Game in progress...")
 
         if bot_stats:
-            summary_lines.append(f"🏆 Best ELO: {bot_stats.max_elo_reached}")
+            summary_lines.append(f"🏆 Opponent setting: {bot_stats.max_elo_reached}")
             if bot_stats.total_games > 0:
-                summary_lines.append(f"📊 Performance: {bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L")
-                if hasattr(bot_stats, 'average_game_duration'):
-                    summary_lines.append(f"⏱️ Avg game: {bot_stats.average_game_duration:.2f}s")
+                summary_lines.append(
+                    f"📊 Performance: {bot_stats.wins}W-{bot_stats.draws}D-{bot_stats.losses}L"
+                )
+                if hasattr(bot_stats, "average_game_duration"):
+                    summary_lines.append(
+                        f"⏱️ Avg game: {bot_stats.average_game_duration:.2f}s"
+                    )
 
         # Add cost information if available
-        show_costs = self.config.show_costs if hasattr(self.config, 'show_costs') else False
+        show_costs = (
+            self.config.show_costs if hasattr(self.config, "show_costs") else False
+        )
         budget_tracker = get_budget_tracker()
-        has_costs = budget_tracker and budget_tracker.is_active and budget_tracker.get_current_cost() > 0
+        has_costs = (
+            budget_tracker
+            and budget_tracker.is_active
+            and budget_tracker.get_current_cost() > 0
+        )
 
         if show_costs or has_costs:
             try:
@@ -526,11 +576,19 @@ class Dashboard:
 
                     if budget_tracker.budget_limit:
                         usage_pct = (current_cost / budget_tracker.budget_limit) * 100
-                        summary_lines.append(f"📊 Budget: {usage_pct:.1f}% of ${budget_tracker.budget_limit:.2f}")
+                        summary_lines.append(
+                            f"📊 Budget: {usage_pct:.1f}% of ${budget_tracker.budget_limit:.2f}"
+                        )
 
                     if budget_tracker.summary.total_requests > 0:
-                        avg_cost = current_cost / budget_tracker.summary.total_requests if current_cost > 0 else 0
-                        summary_lines.append(f"📞 API calls: {budget_tracker.summary.total_requests} (${avg_cost:.4f}/call)")
+                        avg_cost = (
+                            current_cost / budget_tracker.summary.total_requests
+                            if current_cost > 0
+                            else 0
+                        )
+                        summary_lines.append(
+                            f"📞 API calls: {budget_tracker.summary.total_requests} (${avg_cost:.4f}/call)"
+                        )
             except Exception:
                 # Ignore budget display errors to not break the dashboard
                 pass
@@ -542,7 +600,7 @@ class Dashboard:
             "\n".join(summary_lines),
             title="📊 Summary",
             border_style="blue",
-            padding=(0, 1)
+            padding=(0, 1),
         )
 
     def _create_empty_display(self) -> Panel:
@@ -550,12 +608,16 @@ class Dashboard:
         return Panel(
             Align.center(
                 Group(
-                    Text("🏆 Chess LLM ELO Ladder", style="bold magenta", justify="center"),
-                    Text("Initializing...", style="dim", justify="center")
+                    Text(
+                        "🏆 Chess LLM ELO Ladder",
+                        style="bold magenta",
+                        justify="center",
+                    ),
+                    Text("Initializing...", style="dim", justify="center"),
                 )
             ),
             border_style="magenta",
-            padding=(2, 4)
+            padding=(2, 4),
         )
 
     def display_final_results(self, result: BenchmarkResult) -> None:
@@ -570,7 +632,7 @@ class Dashboard:
         # Main results panel
         results_table = Table(expand=True, show_header=True, header_style="bold cyan")
         results_table.add_column("Bot", style="cyan", no_wrap=True)
-        results_table.add_column("Max ELO", style="green", justify="right")
+        results_table.add_column("Opponent", style="green", justify="right")
         results_table.add_column("Games", style="blue", justify="right")
         results_table.add_column("Win Rate", style="yellow", justify="right")
         results_table.add_column("Record", style="white", justify="center")
@@ -584,23 +646,21 @@ class Dashboard:
             record = f"{stats.wins}W-{stats.draws}D-{stats.losses}L"
 
             # Timing and illegal move statistics
-            avg_move_time = f"{stats.average_move_time:.2f}s" if stats.average_move_time > 0 else "—"
-            avg_game_time = f"{stats.average_game_duration:.2f}s" if hasattr(stats, 'average_game_duration') and stats.average_game_duration > 0 else "—"
+            avg_move_time = (
+                f"{stats.average_move_time:.2f}s"
+                if stats.average_move_time > 0
+                else "—"
+            )
+            avg_game_time = (
+                f"{stats.average_game_duration:.2f}s"
+                if hasattr(stats, "average_game_duration")
+                and stats.average_game_duration > 0
+                else "—"
+            )
             illegal_moves = str(stats.total_illegal_moves)
 
-            # Performance assessment
-            if stats.max_elo_reached >= 1800:
-                performance = "🏆 Excellent"
-                performance_style = "bold green"
-            elif stats.max_elo_reached >= 1400:
-                performance = "⭐ Good"
-                performance_style = "green"
-            elif stats.max_elo_reached >= 1000:
-                performance = "👍 Fair"
-                performance_style = "yellow"
-            else:
-                performance = "📚 Learning"
-                performance_style = "red"
+            performance = f"{stats.aborted} incomplete"
+            performance_style = "yellow" if stats.aborted else "green"
 
             results_table.add_row(
                 bot_name,
@@ -611,7 +671,7 @@ class Dashboard:
                 avg_move_time,
                 avg_game_time,
                 illegal_moves,
-                Text(performance, style=performance_style)
+                Text(performance, style=performance_style),
             )
 
         # Summary info
@@ -623,13 +683,15 @@ class Dashboard:
         # Calculate total game duration
         total_game_time = 0.0
         for stat in result.bot_results.values():
-            if hasattr(stat, 'total_game_duration'):
+            if hasattr(stat, "total_game_duration"):
                 total_game_time += stat.total_game_duration
 
         summary_lines.append(f"⏱️ Total time: {total_game_time:.2f}s")
 
         if result.best_bot:
-            summary_lines.append(f"🏆 Best bot: {result.best_bot} (ELO {result.best_elo})")
+            summary_lines.append(
+                f"Highest observed score: {result.best_bot} (descriptive, not an Elo rating)"
+            )
 
         # Add budget information if available
         budget_tracker = get_budget_tracker()
@@ -642,7 +704,9 @@ class Dashboard:
                 summary_lines.append(f"📊 Budget usage: {percentage:.1f}%")
 
             if budget_tracker.summary.total_requests > 0:
-                summary_lines.append(f"📞 API calls: {budget_tracker.summary.total_requests}")
+                summary_lines.append(
+                    f"📞 API calls: {budget_tracker.summary.total_requests}"
+                )
 
         summary_lines.append(f"💾 Results saved to: {result.output_dir}")
 
@@ -650,15 +714,11 @@ class Dashboard:
 
         # Final display
         final_panel = Panel(
-            Group(
-                results_table,
-                Text(""),
-                Text(summary_text, style="dim")
-            ),
+            Group(results_table, Text(""), Text(summary_text, style="dim")),
             title="🎯 Final Results",
             title_align="center",
             border_style="green",
-            padding=(1, 2)
+            padding=(1, 2),
         )
 
         self.console.print(final_panel)
@@ -669,7 +729,7 @@ class Dashboard:
             Text(error, style="red"),
             title=f"❌ {title}",
             border_style="red",
-            padding=(1, 2)
+            padding=(1, 2),
         )
         self.console.print(error_panel)
 
@@ -679,7 +739,7 @@ class Dashboard:
             Text(message, style="blue"),
             title=f"ℹ️ {title}",
             border_style="blue",
-            padding=(1, 2)
+            padding=(1, 2),
         )
         self.console.print(info_panel)
 
@@ -689,7 +749,7 @@ class Dashboard:
             Text(message, style="green"),
             title=f"✅ {title}",
             border_style="green",
-            padding=(1, 2)
+            padding=(1, 2),
         )
         self.console.print(success_panel)
 
@@ -701,7 +761,7 @@ class Dashboard:
         last_move: Optional[chess.Move] = None,
         engine_elo: Optional[int] = None,
         moves: Optional[List[chess.Move]] = None,
-        status: str = ""
+        status: str = "",
     ) -> Panel:
         """
         Render a beautiful robot vs robot chess battle.
@@ -724,7 +784,7 @@ class Dashboard:
             black_bot=black_bot,
             last_move=last_move,
             engine_elo=engine_elo,
-            moves=moves
+            moves=moves,
         )
 
     def display_robot_demo(
@@ -735,7 +795,7 @@ class Dashboard:
         last_move: Optional[chess.Move] = None,
         engine_elo: Optional[int] = None,
         moves: Optional[List[chess.Move]] = None,
-        status: str = "Game in progress..."
+        status: str = "Game in progress...",
     ) -> None:
         """
         Display a robot vs robot demo game.
